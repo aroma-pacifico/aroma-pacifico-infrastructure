@@ -6,7 +6,28 @@ Part of the Aroma Pacífico pilot, the 2026 update of the coffee traceability pi
 
 ## What lives here
 
-This repository holds the Terraform root stack of the pattern environment for the Aroma Pacífico pilot. It manages provider and backend configurations, remote state in S3 with DynamoDB locking, environment variables, secrets handling via AWS Secrets Manager, and plan-only GitHub Actions CI/CD workflows. Distributed AI agent rules and standards are synchronized here from the canonical `aroma-pacifico-ai-agents` repository.
+This repository holds the Terraform root stacks of the pattern environment for the Aroma Pacífico pilot. D02 supplies partial S3 backend declarations with native S3 locking and environment templates; no backend has been deployed or verified in AWS. Provider wiring, workload modules and plan-only CI/CD remain dependent on the roadmap tasks below. Distributed AI agent rules and standards are synchronized here from the canonical `aroma-pacifico-ai-agents` repository.
+
+## Remote state (D02)
+
+Read [the backend guide](docs/remote-state.md) for prerequisites, offline checks,
+IAM boundaries, bootstrap blockers and future initialization. Terraform >= 1.14.0
+and Python >= 3.10 are required for the supplied offline checks.
+
+```text
+stacks/
+|-- network/   (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
+|-- security/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
+`-- workload/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
+scripts/prepare-backend.py
+docs/remote-state.md
+docs/decision-log.md
+docs/troubleshooting-log.md
+```
+
+These are backend-only root scaffolds in the ADR-003 paths, not executable
+workload stacks. B01 (aroma-pacifico/aroma-pacifico-roadmap#21) is still open. No AWS provider or provider lockfile
+is needed by these declarations: S3 backends are built into Terraform.
 
 ## Tasks delivered here
 
