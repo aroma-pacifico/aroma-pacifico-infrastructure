@@ -18,6 +18,15 @@ override.tf.json
 *credentials*.csv
 *accessKeys*.csv
 *.auto.tfvars
+*.tfvars
+*.tfvars.json
+*.tfbackend
+*.tflock
+*.plan
+*.plan.json
+tfplan
+.terraform-data/
+.local/
 
 # Editors and OS
 .idea/
