@@ -13,6 +13,7 @@ This repository holds the Terraform root stacks of the pattern environment for t
 Read [the backend guide](docs/remote-state.md) for prerequisites, offline checks,
 IAM boundaries, bootstrap blockers and future initialization. Terraform >= 1.14.0
 and Python >= 3.10 are required for the supplied offline checks.
+See [D02 technical evidence](docs/d02-technical-evidence.md) for actual checks and remaining limitations.
 
 ```text
 stacks/
@@ -21,6 +22,7 @@ stacks/
 `-- workload/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
 scripts/prepare-backend.py
 docs/remote-state.md
+docs/d02-technical-evidence.md
 docs/decision-log.md
 docs/troubleshooting-log.md
 ```
