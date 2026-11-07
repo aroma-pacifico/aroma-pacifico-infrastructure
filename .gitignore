@@ -20,6 +20,8 @@ override.tf.json
 *.auto.tfvars
 
 # Editors and OS
+.local/
+.terraform-data/
 .idea/
 .vscode/
 .DS_Store
