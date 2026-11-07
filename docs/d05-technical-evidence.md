@@ -231,3 +231,23 @@ configuration contract and documentation; no cloud rollback exists to perform.
 The PR exceeds the approximate 400-line target because reproducible evidence
 and negative tests are included in the requested independent review package.
 The D02 feature branch and all other repositories remain untouched.
+
+## Publication blocker
+
+The authorized push of `feat/25-single-center-association` failed with HTTP 403:
+`Write access to repository not granted.` No PR was created. GitHub's repository
+API confirms that the authenticated `cajire05` account has `pull: true` and
+`push: false` on infrastructure and roadmap. This is a repository permission
+blocker despite valid CLI authentication. No fork, alternate identity, main
+push or permission change was attempted.
+
+The verified implementation remains on the local feature branch. A Draft PR
+body using the repository template is prepared under ignored
+`.local/d05-pr-body.md`. Publication requires repository write access for this
+account or an authorized maintainer publishing these reviewed commits. The
+story must remain open, and any resulting PR must remain Draft while the
+resource association and cloud-link plan acceptance criteria are incomplete.
+
+The authorized [B05 progress comment and sanitized evidence snapshot](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/25#issuecomment-6713583133)
+were published successfully. This is the available remote evidence link; the
+repository document and implementation commits remain local pending push access.

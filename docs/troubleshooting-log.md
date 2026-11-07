@@ -41,3 +41,19 @@ without the missing-variable warning.
 **Preventive architecture:** Use files for structured multiline inputs and
 gate report consumption on command success. An older report is not evidence
 for a later failed invocation.
+
+## D05 GitHub publication permissions
+
+**Context and symptom:** The authorized feature-branch push failed with HTTP
+403, `Write access to repository not granted`, despite successful CLI login.
+
+**Root cause:** GitHub reports `pull: true` and `push: false` for the authenticated
+account on the infrastructure repository.
+
+**Resolution applied:** Preserved the commits locally and prepared the Draft
+PR body. Published the authorized progress comment and sanitized evidence on
+roadmap issue #25, which remained open. No PR was created.
+
+**Preventive architecture:** Verify repository write access before publication;
+valid authentication alone does not establish push permission. A maintainer must
+restore access or publish the reviewed commits through the normal PR workflow.
