@@ -13,6 +13,9 @@ This repository holds the Terraform root stacks of the pattern environment. Prov
 The [network root guide](stacks/network/README.md) documents the validated
 single-center configuration. AWS connectivity resources and the executable
 account plan remain blocked by B04 and the integration prerequisites.
+See [D05 technical evidence](docs/d05-technical-evidence.md) for actual test
+results and remaining acceptance gaps, and the
+[troubleshooting log](docs/troubleshooting-log.md) for verification setup.
 
 ```text
 stacks/network/
@@ -23,6 +26,8 @@ stacks/network/
 |-- versions.tf
 `-- tests/selection_unit_test.tftest.hcl
 scripts/verify-d05.py
+docs/d05-technical-evidence.md
+docs/troubleshooting-log.md
 ```
 
 ## Tasks delivered here
