@@ -22,6 +22,7 @@ stacks/network/
 |-- variables.tf
 |-- versions.tf
 `-- tests/selection_unit_test.tftest.hcl
+scripts/verify-d05.py
 ```
 
 ## Tasks delivered here

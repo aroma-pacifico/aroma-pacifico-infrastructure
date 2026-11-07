@@ -52,7 +52,14 @@ terraform fmt -check -recursive
 terraform -chdir=stacks/network init -backend=false -input=false
 terraform -chdir=stacks/network validate
 terraform -chdir=stacks/network test
+python scripts/verify-d05.py
 ```
+
+The standard-library Python verifier requires Python >= 3.10. It checks the
+native plan-event outputs and adds six isolated rejection fixtures for invalid
+types and missing inputs. Each fixture runs `terraform test` in a temporary
+directory, never `terraform plan` or `apply`. Operational connectivity inputs
+remain untested because their module is not implemented.
 
 The `pdn` value is configuration tested offline, not a production account plan.
 There is no provider dependency to pin or lock yet. Do not use an empty-resource
