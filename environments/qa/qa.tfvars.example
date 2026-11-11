@@ -167,3 +167,27 @@ farm_ingestion = {
   policy_name    = "fixture-qa-device"
   topic_template = "fixture/qa/telemetry/{thing_name}"
 }
+
+# Firewall rules stack inputs (B07b).
+# The security stack also reads collection_centers and data_store_ports from the
+# network section above. The identifiers below are synthetic fixtures that mirror
+# outputs of stacks/network (vpc_id, subnet_cidr_blocks["application"],
+# interface_endpoint_ids): replace them with those outputs. platform_api_ids and
+# drone_object_bucket_name are placeholders until the API and the drone bucket
+# exist (assumption pending in the decision log); the stack builds their ARNs
+# from the caller account.
+vpc_id = "vpc-00000000000000002"
+
+application_subnet_cidr_blocks = { az1 = "10.81.48.0/22", az2 = "10.81.52.0/22", az3 = "10.81.56.0/22" }
+
+interface_endpoint_ids = {
+  cogn  = "vpce-00000000000000021"
+  exapi = "vpce-00000000000000022"
+  s3    = "vpce-00000000000000023"
+  logs  = "vpce-00000000000000024"
+  mon   = "vpce-00000000000000025"
+  rola  = "vpce-00000000000000026"
+}
+
+platform_api_ids         = ["fixtureqa1"]
+drone_object_bucket_name = "fixture-qa-drone-objects"
