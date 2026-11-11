@@ -8,8 +8,10 @@ stacks/workload/
 |-- variables.tf                            governance variables plus the component inputs
 |-- locals.tf                               governance tags, name prefix, function definitions
 |-- inference_functions.tf                  modules/inference-functions call (B10b, box D10)
+|-- farm.tf                                 modules/farm call, one per enrolled farm (B08b, box D08)
 |-- outputs.tf                              outputs consumed by other stacks and modules
-|-- tests/inference_functions.tftest.hcl    offline plan-mode tests
+|-- tests/                                  offline plan-mode tests, one file per component
+|-- fixtures/                               synthetic public CSRs of the example farm
 `-- .terraform.lock.hcl                     scoped provider lock (PC-IAC-006)
 ```
 
@@ -18,6 +20,10 @@ The telemetry ingestion (B09b) goes in its own `telemetry_ingestion.tf`, as desc
 ## Inference functions (B10b, box D10)
 
 `inference_functions.tf` calls `modules/inference-functions` at `v0.4.0`, the latest tag that contains it. `locals.tf` defines the four functions of the design: the confirmation (`confrm`), verification (`verify`) and estimation (`estim`) drone functions, which share one shape and the module defaults of ASM-281, and the telemetry threshold function (`thresh`) with its own sizing (ASM-162). Each function gets its queue, dead-letter queue, event source mapping, role and log group from the module.
+
+## Farms (B08b, box D08)
+
+`farm.tf` calls `modules/farm` at `v0.4.0` once per entry of `farms`. Each farm gets the IoT thing and certificate of its crop and drying nodes, and attaches the device policy of the ingestion contract to both certificates. The node names are `<client>-<project>-<environment>-<farm key>-crop` and `-drying`; the farm key has at most 4 characters so that the prefix stays within the 21 characters the module accepts. The certificates are created from public CSRs read from files; private keys never leave the devices. The examples enroll one synthetic farm with the CSRs of `fixtures/` (ASM-422).
 
 ## Inputs
 
@@ -29,6 +35,8 @@ The telemetry ingestion (B09b) goes in its own `telemetry_ingestion.tf`, as desc
 | `kms_key_arns` | `map(string)` | `stacks/security` (B06b) | The `kms_key_arns` output of the security stack. The functions use the `telemetry`, `objects`, `records` and `logs` classes. |
 | `permissions_boundary_arn` | `string` | `stacks/security` (B06b) | Optional boundary of every function role; null attaches none. |
 | `inference_targets` | `object` | tfvars | Alert table and topic, drone event rule pattern, drone object pattern, mission table and threshold table. No stack creates them yet, so the examples hold fixtures (ASM-420). |
+| `farms` | `map(object)` | tfvars or provisioning | Enrolled farms: opaque farm identifier and the crop and drying CSR paths. One synthetic farm in the examples (ASM-422). |
+| `farm_ingestion` | `object` | B09b | Endpoint, device policy and topic template of the ingestion. Temporary: B09b replaces it with the `ingestion` output of the module. |
 | `telemetry_references` | `object` | B09b | Telemetry table and topic rule of the telemetry ingestion. Temporary: B09b replaces it with module outputs. |
 
 Cross-stack values arrive as input variables with fixture values in the examples (ASM-420). The fixtures use the all-zero emulator account, so the plan works against Floci with empty state.
@@ -44,6 +52,8 @@ Only the outputs that other stacks and modules need are exposed (PC-IAC-019 sect
 | `queue_arns` | B06b | Send permission of the telemetry rule role on the threshold queue. |
 | `key_user_arns` | B06b | `key_user_arns` input of the security module, so the key policies name the function roles. |
 | `inference_function_names`, `dead_letter_queue_names` | observability | Function and dead-letter queue alarms. |
+| `farm_node_names`, `farm_telemetry_topics` | node provisioning | MQTT client identifier and publish topic of each node. |
+| `farm_certificate_arns` | revocation | Certificate of each node, for revocation; no key material. |
 
 ## Wiring telemetry ingestion (B09b)
 
@@ -58,14 +68,15 @@ B09b adds `telemetry_ingestion.tf` with one call to `modules/telemetry-ingestion
 | `providers` | `{ aws.project = aws }`. |
 | `rule_role_arn`, `tls_security_policy` and the other inputs | New variables, alphabetical in the B09b block of `variables.tf`, with fixture values in the three tfvars examples. `rule_role_arn` comes from `stacks/security`. |
 
-In the opposite direction, the threshold function needs two values from the ingestion module. Today they come from `var.telemetry_references`. B09b changes two lines of `locals.tf`:
+In the opposite direction, the threshold function and the farms need values from the ingestion module. Today they come from `var.telemetry_references` and `var.farm_ingestion`. B09b changes three lines of `locals.tf`:
 
 ```hcl
 telemetry_table_arn = module.telemetry_ingestion.telemetry_table_arn
 telemetry_rule_arn  = module.telemetry_ingestion.topic_rule_arn
+farm_ingestion      = module.telemetry_ingestion.ingestion
 ```
 
-and then deletes the `telemetry_references` variable and its block in the three tfvars examples and in `tests/inference_functions.tftest.hcl`. There is no dependency cycle: `topic_rule_arn` is built from the rule name, and the telemetry table does not depend on the queue. B09b adds its own outputs to `outputs.tf` and its own `tests/telemetry_ingestion.tftest.hcl`.
+and then deletes the `telemetry_references` and `farm_ingestion` variables and their blocks in the three tfvars examples and in both test files. The ingestion module derives `ingestion.environment` from its own `environment` input, which must be `var.environment`, so the farm module check that both environments match keeps passing. There is no dependency cycle: `topic_rule_arn` is built from the rule name, and the telemetry table does not depend on the queue. B09b adds its own outputs to `outputs.tf` and its own `tests/telemetry_ingestion.tftest.hcl`.
 
 ## Plan it against Floci
 
@@ -86,4 +97,4 @@ terraform -chdir=stacks/workload plan -lock=false \
   -var-file=../../environments/qa/qa.tfvars.example
 ```
 
-Each environment plans 36 resources to add, 0 to change and 0 to destroy: nine per function. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
+Each environment plans 44 resources to add, 0 to change and 0 to destroy: nine per inference function and eight for the example farm. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
