@@ -13,9 +13,11 @@ environments/
 `-- pdn/pdn.tfvars.example
 ```
 
-Each example holds only non-sensitive inputs, the same three for every stack:
-`aws_region`, `environment` and `common_tags` (Client, Project, Environment,
-Owner, CostCenter). The Region is `us-east-1` for every environment (ADR-001).
+Each example holds only non-sensitive inputs. Every stack takes `aws_region`,
+`environment` and `common_tags` (Client, Project, Environment, Owner,
+CostCenter); the state-backend stack also takes the role-name inputs at the end
+of the file (B02), and the other stacks ignore them with an undeclared-variable
+warning. The Region is `us-east-1` for every environment (ADR-001).
 The `Client` and `Project` values are still pending decision PD-070, so the
 examples carry placeholders. Backend files are not kept here: each stack owns
 its `backends/<env>.s3.tfbackend.example` (B02).

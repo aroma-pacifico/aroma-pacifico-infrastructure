@@ -2,20 +2,81 @@
 # Copy to pdn.tfvars and replace the placeholders. This file and its copy hold
 # names and codes only: never a password, token, key or account identifier
 # (PC-IAC-002 section 5.3, PC-IAC-016, ADR-003).
-# Every stack (state-backend, network, security, workload) takes these inputs.
+# Every stack (state-backend, network, security, workload) takes the inputs before
+# the network section; only stacks/network declares the network section itself.
 
 # us-east-1 is the single Region of every environment (ADR-001).
 aws_region  = "us-east-1"
 environment = "pdn"
 
 # Governance tags applied through provider default_tags (PC-IAC-004).
-# Client and Project values are pending decision PD-070; Owner is a role code
-# (SR1, SR2, JR1 or JR2), never a person's name; CostCenter is one of farms,
-# drones, collection-centers, trips or shared (ASM-064).
+# Client and Project values are pending decision PD-070 (the placeholders are
+# lowercase letters and digits because the state bucket name is built from
+# them); Owner is a role code (SR1, SR2, JR1 or JR2), never a person's name;
+# CostCenter is one of farms, drones, collection-centers, trips or shared
+# (ASM-064).
 common_tags = {
-  Client      = "<client-pd-070>"
-  Project     = "<project-pd-070>"
+  Client      = "clipd070"
+  Project     = "prjpd070"
   Environment = "pdn"
   Owner       = "SR1"
   CostCenter  = "shared"
+}
+
+# Inputs of the state-backend stack only (B02, box D02); the other stacks ignore
+# them. Role names, never ARNs: the account identifier is read from the caller
+# identity at plan time. The names are placeholders until B06 provides the real
+# identities. A plan role never administers the key, and plan and write roles
+# are different across domains.
+key_administrator_role_names    = ["state-backend-apply"]
+configuration_reader_role_names = ["state-auditor"]
+break_glass_role_patterns       = ["aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_BreakGlass_*"]
+
+domain_access = {
+  network = {
+    plan_role_names  = ["network-plan"]
+    write_role_names = ["network-apply"]
+  }
+  security = {
+    plan_role_names  = ["security-plan"]
+    write_role_names = ["security-apply"]
+  }
+  workload = {
+    plan_role_names  = ["workload-plan"]
+    write_role_names = ["workload-apply"]
+  }
+  state-backend = {
+    plan_role_names  = ["state-backend-plan"]
+    write_role_names = ["state-backend-apply"]
+  }
+}
+
+
+# Network inputs of stacks/network only (B04b, box D04); the other stacks ignore them.
+vpc_cidr_block                       = "10.82.0.0/16"
+collection_center_summary_cidr_block = "10.40.0.0/13"
+transit_gateway_id                   = "tgw-0123456789abcdef0"
+data_store_ports                     = [5432]
+
+subnets = {
+  public_query         = { az1 = "10.82.0.0/22", az2 = "10.82.4.0/22", az3 = "10.82.8.0/22" }
+  telemetry_ingress    = { az1 = "10.82.16.0/22", az2 = "10.82.20.0/22", az3 = "10.82.24.0/22" }
+  drone_object_ingress = { az1 = "10.82.32.0/22", az2 = "10.82.36.0/22", az3 = "10.82.40.0/22" }
+  application          = { az1 = "10.82.48.0/22", az2 = "10.82.52.0/22", az3 = "10.82.56.0/22" }
+  data                 = { az1 = "10.82.64.0/22", az2 = "10.82.68.0/22", az3 = "10.82.72.0/22" }
+  object_storage       = { az1 = "10.82.80.0/22", az2 = "10.82.84.0/22", az3 = "10.82.88.0/22" }
+  administration       = { az1 = "10.82.96.0/22", az2 = "10.82.100.0/22", az3 = "10.82.104.0/22" }
+  transit              = { az1 = "10.82.240.0/28", az2 = "10.82.240.16/28", az3 = "10.82.240.32/28" }
+}
+
+collection_centers = {
+  cauca  = { cidr_block = "10.41.0.0/16", firewall_cidr_block = "10.41.20.1/32", ground_station_cidr_block = "10.41.2.10/32" }
+  huila  = { cidr_block = "10.42.0.0/16", firewall_cidr_block = "10.42.20.1/32", ground_station_cidr_block = "10.42.2.10/32" }
+  tolima = { cidr_block = "10.43.0.0/16", firewall_cidr_block = "10.43.20.1/32", ground_station_cidr_block = "10.43.2.10/32" }
+}
+
+interface_endpoints = {
+  exapi = { service = "execute-api", tier = "application" }
+  s3    = { service = "s3", tier = "object_storage" }
+  logs  = { service = "logs", tier = "administration" }
 }

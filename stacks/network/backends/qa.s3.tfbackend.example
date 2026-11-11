@@ -1,0 +1,10 @@
+# Partial S3 backend configuration for network in qa (B02, ADR-003, PC-IAC-008).
+# Example values only. Copy to qa.s3.tfbackend, replace the placeholders with
+# the names created by the state-backend stack, then pass it to terraform init
+# with -backend-config. Never commit the real file (it is git-ignored).
+bucket       = "<client>-<project>-qa-state"
+key          = "network/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+kms_key_id   = "alias/<client>-<project>-qa-state"
+use_lockfile = true

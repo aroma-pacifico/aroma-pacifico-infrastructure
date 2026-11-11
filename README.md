@@ -15,18 +15,18 @@ This repository is plan-only: nothing here may run `terraform apply` or `terrafo
 ```text
 aroma-pacifico-infrastructure/
 |-- .github/
-|   `-- workflows/          pr-conventions.yml now; CI (B11) and CD (B12) workflows are added here
+|   `-- workflows/          pr conventions, CI gates, Floci plan and Infracost; the CD workflow (B12) is added here
 |-- .terraform-version      exact Terraform patch used by local runs and CI
 |-- docs/
 |   |-- case/               case statement, the sole source of requirements
 |   `-- diagram-boxes.md    map of diagram boxes D01 to D13 to this repository
 |-- environments/
-|   |-- dev/                per-environment variable and backend files (B02, B03)
+|   |-- dev/                per-environment variable examples (B03)
 |   |-- qa/
 |   `-- pdn/
 |-- release-notes/          filled release notes, one file per release
 |-- stacks/
-|   |-- state-backend/      bootstrap of the state buckets (B02, box D02)
+|   |-- state-backend/      state bucket and key per environment, backend examples (B02, box D02)
 |   |-- network/            network domain (B04, box D04)
 |   |-- security/           security domain (B06, box D06)
 |   `-- workload/           farm, ingestion and inference function (B08 to B10)
@@ -34,6 +34,30 @@ aroma-pacifico-infrastructure/
 ```
 
 Each stack is a Terraform root module with `versions.tf`, `backend.tf`, `providers.tf` and `variables.tf`, and a committed `.terraform.lock.hcl`. The S3 backend is declared empty and is configured at `terraform init` time from the backend file of the target environment. The environments are `dev`, `qa` and `pdn`.
+
+## Remote state and plans: what each person needs
+
+This project is plan-only, so the state is always empty and there is no shared state. Nobody needs a running backend, a bucket, an AWS account or a local Floci to work here.
+
+The remote state backend is code. Every stack declares `backend "s3" {}` with partial configuration, and `stacks/<stack>/backends/<env>.s3.tfbackend.example` holds example values for `dev`, `qa` and `pdn`: separate state key per domain, encryption with the environment key and native S3 locking (`use_lockfile = true`). The real `.tfbackend` files are git-ignored, so no bucket name or account identifier is committed. `stacks/state-backend` creates the bucket and key of each environment by consuming the `state-backend` module at the git tag `v0.3.0` (PC-IAC-015); it reads the account from the caller identity at plan time. Validate the backend code without any backend:
+
+```bash
+terraform -chdir=stacks/state-backend init -backend=false
+terraform -chdir=stacks/state-backend validate
+terraform -chdir=stacks/state-backend test
+```
+
+`terraform plan` runs in CI against an ephemeral Floci container (PC-IAC-028) that the workflow starts inside each run and discards afterwards. Today `.github/workflows/floci-plan.yml` does this for the four stacks with the `qa` example variables; the full plan pipeline (the saved plan and review summary) belongs to [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31), which is still open. The `aroma-pacifico-terraform-modules` CI already plans its samples against Floci.
+
+Running Floci locally is optional and only previews a plan before pushing. From the repository root:
+
+```bash
+docker run -d --rm --name floci -p 4566:4566 floci/floci@sha256:5ee85db604c4aa74ac76e07ea5cc83086f37bb472bf3dbb97e34019e48efae9c
+export AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=us-east-1
+terraform -chdir=stacks/state-backend init -backend=false && terraform -chdir=stacks/state-backend plan -lock=false -var-file=../../environments/qa/qa.tfvars.example
+```
+
+Never expose a Floci instance from a personal machine to the team or to CI: it has no authentication, and a disposable container per run gives the same plan. Stop the local one with `docker stop floci`.
 
 ## Prerequisites
 
