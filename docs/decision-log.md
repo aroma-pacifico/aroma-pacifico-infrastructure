@@ -25,3 +25,10 @@ canonical governance amendment reviewed in `aroma-pacifico-ai-agents`, followed
 by normal rule synchronization. This task does not authorize or perform that
 amendment. Transfer these blocker references into the master register through
 the architecture owner's normal review; unrelated repositories remain unchanged.
+
+
+## B02 final scope clarification, 2026-11-11
+
+B01/B03 and B06 are now published, so older absent-baseline notes are superseded. B06 still includes a state key class although ASM-213 assigns the backend key to B02. Do not consume a duplicate state key: the B02 bootstrap output is authoritative. Ask SR1/SR2 to reconcile B06 ownership; do not change their module. B06 provides no S3 access-logging destination. The existing LOW finding remains. The full D02 architecture diagram is now published in diagrams main.
+
+The user confirms mocked plan-only delivery and excludes all cloud provisioning. The constitution already agrees. ADR-003's account-plan CI wording and open PD-019 still need SR1/SR2 to record the mock-only evidence decision in the canonical architecture log; ASM-051's qa account-plan restriction does not turn a pdn synthetic test into an account plan. No canonical decision or acceptance criterion is rewritten here. Independent review, release publication and acceptance remain owner actions. Operational deployment and migration are outside scope, not delivery blockers.
