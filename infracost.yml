@@ -1,0 +1,18 @@
+# Infracost CLI v2 configuration for the four root stacks (PC-IAC-027).
+# Prices the authored configuration of qa, the environment whose plan is
+# evaluated (ASM-051), without cloud credentials or remote state. Only the
+# non-sensitive example variable file is read.
+version: 0.1
+projects:
+  - name: stacks/state-backend
+    path: stacks/state-backend
+    terraform_var_files: [../../environments/qa/qa.tfvars.example]
+  - name: stacks/network
+    path: stacks/network
+    terraform_var_files: [../../environments/qa/qa.tfvars.example]
+  - name: stacks/security
+    path: stacks/security
+    terraform_var_files: [../../environments/qa/qa.tfvars.example]
+  - name: stacks/workload
+    path: stacks/workload
+    terraform_var_files: [../../environments/qa/qa.tfvars.example]
