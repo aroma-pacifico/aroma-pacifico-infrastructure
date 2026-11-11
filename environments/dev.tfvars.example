@@ -1,0 +1,6 @@
+# Example variables for dev environment
+environment = "dev"
+# Add non-sensitive variables here, e.g.,
+region = "us-east-1"
+# Sensitive variables should be supplied via secret manager at apply time
+# db_password = "${var.db_password}" # placeholder
