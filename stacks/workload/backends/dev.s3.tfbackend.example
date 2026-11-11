@@ -1,0 +1,10 @@
+# Partial S3 backend configuration for workload in dev (B02, ADR-003, PC-IAC-008).
+# Example values only. Copy to dev.s3.tfbackend, replace the placeholders with
+# the names created by the state-backend stack, then pass it to terraform init
+# with -backend-config. Never commit the real file (it is git-ignored).
+bucket       = "<client>-<project>-dev-state"
+key          = "workload/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+kms_key_id   = "alias/<client>-<project>-dev-state"
+use_lockfile = true

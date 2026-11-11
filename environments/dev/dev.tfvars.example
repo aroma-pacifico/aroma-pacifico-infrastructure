@@ -10,57 +10,43 @@ aws_region  = "us-east-1"
 environment = "dev"
 
 # Governance tags applied through provider default_tags (PC-IAC-004).
-# Client and Project are placeholders until PD-070 is decided (lowercase, at most
-# 10 and 15 characters, because the network names derive from them); Owner is a role code
-# (SR1, SR2, JR1 or JR2), never a person's name; CostCenter is one of farms,
-# drones, collection-centers, trips or shared (ASM-064).
+# Client and Project values are pending decision PD-070 (the placeholders are
+# lowercase letters and digits because the state bucket name is built from
+# them); Owner is a role code (SR1, SR2, JR1 or JR2), never a person's name;
+# CostCenter is one of farms, drones, collection-centers, trips or shared
+# (ASM-064).
 common_tags = {
-  Client      = "clnt"
-  Project     = "proj"
+  Client      = "clipd070"
+  Project     = "prjpd070"
   Environment = "dev"
   Owner       = "SR1"
   CostCenter  = "shared"
 }
 
-# Network stack inputs (B04b). Addresses come from the addressing plan
-# (docs/addressing-plan.md of the architecture repository, sections 3 and 4.3).
-# The AWS Organization ID is not kept here: export TF_VAR_organization_id.
-vpc_cidr_block = "10.80.0.0/16"
+# Inputs of the state-backend stack only (B02, box D02); the other stacks ignore
+# them. Role names, never ARNs: the account identifier is read from the caller
+# identity at plan time. The names are placeholders until B06 provides the real
+# identities. A plan role never administers the key, and plan and write roles
+# are different across domains.
+key_administrator_role_names    = ["state-backend-apply"]
+configuration_reader_role_names = ["state-auditor"]
+break_glass_role_patterns       = ["aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_BreakGlass_*"]
 
-subnets = {
-  public_query         = { az1 = "10.80.0.0/22", az2 = "10.80.4.0/22", az3 = "10.80.8.0/22" }
-  telemetry_ingress    = { az1 = "10.80.16.0/22", az2 = "10.80.20.0/22", az3 = "10.80.24.0/22" }
-  drone_object_ingress = { az1 = "10.80.32.0/22", az2 = "10.80.36.0/22", az3 = "10.80.40.0/22" }
-  application          = { az1 = "10.80.48.0/22", az2 = "10.80.52.0/22", az3 = "10.80.56.0/22" }
-  data                 = { az1 = "10.80.64.0/22", az2 = "10.80.68.0/22", az3 = "10.80.72.0/22" }
-  object_storage       = { az1 = "10.80.80.0/22", az2 = "10.80.84.0/22", az3 = "10.80.88.0/22" }
-  administration       = { az1 = "10.80.96.0/22", az2 = "10.80.100.0/22", az3 = "10.80.104.0/22" }
-  transit              = { az1 = "10.80.240.0/28", az2 = "10.80.240.16/28", az3 = "10.80.240.32/28" }
-}
-
-# The three /16 blocks reserved by the case statement (point 3). Firewall edge is
-# host .1 of zone 20 and the ground station is host .10 of zone 2 (firewall policy).
-collection_centers = {
-  cauca  = { cidr_block = "10.41.0.0/16", firewall_cidr_block = "10.41.20.1/32", ground_station_cidr_block = "10.41.2.10/32" }
-  huila  = { cidr_block = "10.42.0.0/16", firewall_cidr_block = "10.42.20.1/32", ground_station_cidr_block = "10.42.2.10/32" }
-  tolima = { cidr_block = "10.43.0.0/16", firewall_cidr_block = "10.43.20.1/32", ground_station_cidr_block = "10.43.2.10/32" }
-}
-
-collection_center_summary_cidr_block = "10.40.0.0/13"
-
-# Synthetic ID: replace with the transit gateway of the network account, or set
-# null to create no route to the centers.
-transit_gateway_id = "tgw-0123456789abcdef0"
-
-# Placeholder: the real port is selected by the data design (A13).
-data_store_ports = [5432]
-
-# cognito-idp is UNVERIFIED as an interface endpoint service (PD-120, PD-200).
-interface_endpoints = {
-  cogn  = { service = "cognito-idp", tier = "application" }
-  exapi = { service = "execute-api", tier = "application" }
-  s3    = { service = "s3", tier = "object_storage" }
-  logs  = { service = "logs", tier = "administration" }
-  mon   = { service = "monitoring", tier = "administration" }
-  rola  = { service = "rolesanywhere", tier = "administration" }
+domain_access = {
+  network = {
+    plan_role_names  = ["network-plan"]
+    write_role_names = ["network-apply"]
+  }
+  security = {
+    plan_role_names  = ["security-plan"]
+    write_role_names = ["security-apply"]
+  }
+  workload = {
+    plan_role_names  = ["workload-plan"]
+    write_role_names = ["workload-apply"]
+  }
+  state-backend = {
+    plan_role_names  = ["state-backend-plan"]
+    write_role_names = ["state-backend-apply"]
+  }
 }
