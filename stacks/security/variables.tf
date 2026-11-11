@@ -82,3 +82,81 @@ variable "security_apply_role_names" {
     error_message = "Provide at least one role name of at most 64 characters, without a path or a wildcard."
   }
 }
+
+# Firewall rules inputs (B07b), alphabetical among themselves. The network
+# identifiers mirror outputs of stacks/network and arrive as variables, never
+# through terraform_remote_state (PC-IAC-019). Values live in the per-environment
+# variable files; none has a default.
+
+variable "application_subnet_cidr_blocks" {
+  type        = map(string)
+  description = "CIDR blocks of the application tier subnets keyed by Availability Zone slot (az1 to az3). Mirrors subnet_cidr_blocks[\"application\"] of stacks/network. They are the only sources of the data store security group (CL-DAT-02)."
+
+  validation {
+    condition     = length(var.application_subnet_cidr_blocks) > 0 && alltrue([for cidr_block in values(var.application_subnet_cidr_blocks) : can(cidrhost(cidr_block, 0)) && can(regex("/(1[6-9]|2[0-9]|3[0-2])$", cidr_block))])
+    error_message = "Provide valid subnet CIDR blocks with a prefix of at least /16; the whole internet is never an admitted source."
+  }
+}
+
+# Same name, type and value as the network stack: the centers are one set for the
+# environment and both stacks read the same variable file. Every other zone
+# address of a center derives from its block (see firewall_rules.tf).
+variable "collection_centers" {
+  type = map(object({
+    cidr_block                = string
+    firewall_cidr_block       = string
+    ground_station_cidr_block = string
+  }))
+  description = "Collection centers keyed by name, as in stacks/network: the reserved /16 of the center, and the firewall and ground station /32 hosts inside it. The staff, logistics, device management and guest blocks derive from the /16 (A11 section 3.1)."
+
+  validation {
+    condition     = length(var.collection_centers) > 0 && alltrue([for center in values(var.collection_centers) : can(regex("^10\\.4[0-7]\\.0\\.0/16$", center.cidr_block)) && can(regex("/32$", center.firewall_cidr_block)) && can(regex("/32$", center.ground_station_cidr_block))])
+    error_message = "Each center needs a /16 block inside 10.40.0.0/13, and /32 hosts for the firewall and the ground station."
+  }
+}
+
+# Same name and value as the network stack (CL-DAT-02).
+variable "data_store_ports" {
+  type        = list(number)
+  description = "TCP ports of the data store that the application tier may reach (CL-DAT-02), as in stacks/network. The port is selected by the data design (A13); an empty list leaves the data store group without ingress."
+}
+
+variable "drone_object_bucket_name" {
+  type        = string
+  description = "Name of the drone object bucket whose writes the S3 interface endpoint policy admits (CL-DRN-02). Another stack creates the bucket; this stack builds its ARN, so no ARN is stored."
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.drone_object_bucket_name))
+    error_message = "Provide a bucket name, not an ARN."
+  }
+}
+
+variable "interface_endpoint_ids" {
+  type        = map(string)
+  description = "Interface endpoint IDs keyed by the short name of interface_endpoints. Mirrors the interface_endpoint_ids output of stacks/network. The keys exapi (execute-api, CL-APP-02) and s3 (object_storage tier, CL-DRN-02) must be present."
+
+  validation {
+    condition     = alltrue([for key in ["exapi", "s3"] : contains(keys(var.interface_endpoint_ids), key)]) && alltrue([for id in values(var.interface_endpoint_ids) : can(regex("^vpce-[0-9a-f]{8,17}$", id))])
+    error_message = "interface_endpoint_ids must include exapi and s3, and every value must look like vpce-0123456789abcdef0."
+  }
+}
+
+variable "platform_api_ids" {
+  type        = list(string)
+  description = "IDs of the platform's private REST APIs that the execute-api endpoint policy admits (CL-APP-02). This stack builds their ARNs in the caller account and Region, so no account is stored."
+
+  validation {
+    condition     = length(var.platform_api_ids) > 0 && alltrue([for id in var.platform_api_ids : can(regex("^[a-z0-9]{10}$", id))])
+    error_message = "Provide at least one REST API ID of 10 lowercase letters and digits."
+  }
+}
+
+variable "vpc_id" {
+  type        = string
+  description = "ID of the environment VPC. Mirrors the vpc_id output of stacks/network."
+
+  validation {
+    condition     = can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
+    error_message = "vpc_id must look like vpc-0123456789abcdef0."
+  }
+}

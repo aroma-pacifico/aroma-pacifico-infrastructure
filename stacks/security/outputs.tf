@@ -55,3 +55,48 @@ output "staff_user_pool_id" {
   description = "ID of the staff user pool."
   value       = module.security.staff_user_pool_id
 }
+
+# Firewall rules (B07b). The attachments belong to other stacks: the web ACLs go
+# to the CloudFront distribution and the API front door, the groups to the data
+# store and the Resolver inbound endpoint.
+
+output "prefix_list_ids" {
+  description = "IDs of the five collection center prefix lists, keyed cc_device_mgmt, cc_firewalls, cc_ground_stations, cc_logistics and cc_staff, for security group rules of other stacks."
+  value       = module.firewall_rules.prefix_list_ids
+}
+
+output "rule_catalog" {
+  description = "Every firewall rule created, keyed by policy table ID, with group, mechanism, validity (permanent or temporary) and the pre-production audit flag (PD-125), as input to the release notes and the audit."
+  value       = module.firewall_rules.rule_catalog
+}
+
+output "security_group_ids" {
+  description = "Security group IDs keyed session_host, resolver and data_store, for the host, the Resolver inbound endpoint and the data store to attach. No load_balancer key exists because the lookup front door has no load balancer (PD-051)."
+  value       = module.firewall_rules.security_group_ids
+}
+
+output "temporary_rule_ids" {
+  description = "IDs of the temporary security group rules; empty because temporary rules are added and removed as production changes (ASM-128)."
+  value       = module.firewall_rules.temporary_rule_ids
+}
+
+output "web_acl_arns" {
+  description = "ARNs of the web ACLs, keyed lookup and api, for the CloudFront distribution of the public lookup and the application API front door to associate."
+  value       = module.firewall_rules.web_acl_arns
+}
+
+output "web_acl_settings" {
+  description = "Scope, rate limits and allowed paths passed to the web ACLs (ASM-129, ASM-155, ASM-300), so the pre-production audit and the plan review read the thresholds in force."
+  value = {
+    api = {
+      rate_limit_per_5_minutes = local.api_rate_limit
+      scope                    = local.waf_scope
+    }
+    lookup = {
+      allowed_path_prefixes    = local.lookup_allowed_path_prefixes
+      rate_limit_per_5_minutes = local.lookup_rate_limit
+      rate_scope_path          = local.lookup_rate_scope_path
+      scope                    = local.waf_scope
+    }
+  }
+}

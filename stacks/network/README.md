@@ -44,7 +44,7 @@ Only the outputs that later stacks need are exposed (PC-IAC-019 section 3.2).
 | `subnet_cidr_blocks` | B07b | `application` blocks are the only sources of the data store security group (`application_cidr_blocks`). |
 | `route_table_ids`, `network_acl_ids` | later routes and associations | One per tier. |
 | `interface_endpoint_ids` | B07b | `execute-api` and `s3` endpoints that receive the endpoint policies (CL-APP-02, CL-DRN-02). |
-| `endpoint_security_group_ids`, `gateway_endpoint_ids` | B06b, B07b | Endpoint security groups; gateway endpoint IDs for `aws:SourceVpce` conditions. |
+| `endpoint_security_group_ids`, `gateway_endpoint_ids` | B06b | Endpoint security groups; gateway endpoint IDs for `aws:SourceVpce` conditions. |
 | `availability_zone_ids` | B09b | Availability Zone ID behind each slot. |
 | `transit_attachment_subnet_ids` | network account | Subnets for the transit gateway attachment, created outside this stack. |
 

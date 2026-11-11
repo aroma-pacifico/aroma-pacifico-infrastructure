@@ -39,6 +39,23 @@ variables {
     records   = ["clnt-proj-pdn-rol-telemetry"]
     objects   = ["clnt-proj-pdn-rol-drone"]
   }
+
+  # Firewall rules inputs (B07b); the rules themselves are tested in
+  # firewall_rules.tftest.hcl.
+  vpc_id                         = "vpc-00000000000000003"
+  application_subnet_cidr_blocks = { az1 = "10.82.48.0/22", az2 = "10.82.52.0/22", az3 = "10.82.56.0/22" }
+  data_store_ports               = [5432]
+  platform_api_ids               = ["fixturepd1"]
+  drone_object_bucket_name       = "fixture-pdn-drone-objects"
+  interface_endpoint_ids = {
+    exapi = "vpce-00000000000000032"
+    s3    = "vpce-00000000000000033"
+  }
+  collection_centers = {
+    cauca  = { cidr_block = "10.41.0.0/16", firewall_cidr_block = "10.41.20.1/32", ground_station_cidr_block = "10.41.2.10/32" }
+    huila  = { cidr_block = "10.42.0.0/16", firewall_cidr_block = "10.42.20.1/32", ground_station_cidr_block = "10.42.2.10/32" }
+    tolima = { cidr_block = "10.43.0.0/16", firewall_cidr_block = "10.43.20.1/32", ground_station_cidr_block = "10.43.2.10/32" }
+  }
 }
 
 run "pdn_plans_eight_keys_and_two_pools" {
