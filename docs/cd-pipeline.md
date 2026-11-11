@@ -80,12 +80,13 @@ flowchart LR
         PD --> PQ["plan-qa"]
         PQ --> PP["plan-pdn"]
         G --> C["cost: Infracost before and after"]
-        PP --> R["review-pdn: digest, plan, cost delta, inputs for run 2"]
+        PP --> R["review-pdn: digest, plan, cost delta, how to approve"]
         C --> R
     end
-    R -->|"requester hands over run id and digest"| A
+    R -->|"requester hands over run id and digest"| G2
     subgraph R2["Run 2 - approval mode (approver, approve_run_id and approve_digest)"]
-        A["pdn-approval: scripts/cd-verify-approval.sh"] -->|"all checks pass"| REC["approval-record-pdn and job summary"]
+        G2["guard: mode approval"] --> A["pdn-approval: scripts/cd-verify-approval.sh"]
+        A -->|"all checks pass"| REC["approval-record-pdn and job summary"]
         A -->|"any check fails"| X["Run fails, nothing recorded"]
     end
 ```
@@ -99,18 +100,22 @@ design-level pipeline diagram is `pipelines/platform-pipeline` in
 |---|---|
 | Push to `main` touching `stacks/`, `environments/`, `.terraform-version`, or the CD files | `guard`, `plan-dev`, `plan-qa` and the `qa` cost estimate. Nothing waits for approval. |
 | Manual dispatch, `promote_to = qa` | The same as a push. |
-| Manual dispatch, `promote_to = pdn`, `approve_run_id` empty (promotion mode, run 1) | Everything above plus `plan-pdn`, the `pdn` cost estimate and `review-pdn`. The run ends after `review-pdn`, with the digest and the inputs for run 2 in its summary. |
-| Manual dispatch with `approve_run_id` and `approve_digest` set (approval mode, run 2) | The job `pdn-approval` ("Production approval") runs `scripts/cd-verify-approval.sh`, which fails the run unless every check of section 3 passes, and then writes the approval record. No plan is made and nothing is applied. |
+| Manual dispatch, `promote_to = pdn`, `approve_run_id` empty (promotion mode, run 1) | Everything above plus `plan-pdn`, the `pdn` cost estimate and `review-pdn`. The run ends after `review-pdn`. Its summary has a "How to approve" section with the digest and the inputs for run 2, and it stores the artifact `review-context-pdn` (7 days) that run 2 reads. |
+| Manual dispatch with `approve_run_id` set (approval mode, run 2) | `guard` runs and reports the mode; `plan-dev`, `plan-qa`, `plan-pdn`, `cost` and `review-pdn` are skipped. Only the job `pdn-approval` ("Production approval", permissions `contents: read` and `actions: read`, no Environment) runs `scripts/cd-verify-approval.sh`, which fails the run unless every check of section 3 passes, and then writes the approval record. Nothing is applied. |
 
 Production is promoted only by manual dispatch on purpose. The design requires a
 release note and a notice to the Federation with a lead time (ASM-173) before a
 production change, so a production run cannot start by itself on merge. Run 1
 needs `release_note_url` (an HTTPS link to the filled note under
 `release-notes/`) or an `incident_reference`. A dispatch from any ref other than
-`main` is refused. A newer merge cancels a run still in progress, which is the
-"later merge supersedes" rule of A18 section 4.4. Because run 2 must be on the
-same commit as run 1, a merge between the two runs makes the approval fail on
-the commit check; dispatch run 1 again on the new commit.
+`main` is refused, for both runs. Promotion runs share the concurrency group
+`cd-promotion-<ref>` with cancellation, so a later push to `main` cancels a
+running review, which is the "later merge supersedes" rule of A18 section 4.4.
+Approval runs use their own group `cd-promotion-approval-<approve_run_id>`
+without cancellation, so an approval run never cancels a promotion run and is
+never cancelled by one. Because run 2 must be on the same commit as run 1, a
+merge between the two runs moves the commit and invalidates the pending review:
+dispatch run 1 again on the new commit.
 
 ### 2.1 How to promote to production
 
@@ -125,11 +130,14 @@ page, "Run workflow".
    ```
 
    For an incident, pass `-f incident_reference=<reference>` instead of the link.
+   The release note and the incident reference are given only here: run 2
+   ignores any value typed for them and reads the ones stored by run 1.
 2. The requester reads the review summary of run 1 (section 3): destroys and
    replacements first, then the plan table and the cost delta, and copies the
-   run identifier and the plan digest from its "Inputs for run 2" section.
+   run identifier and the plan digest from its "How to approve" section.
 3. A different person listed in `PDN_APPROVERS` reads the same summary and
-   dispatches run 2 from `main`, on the same commit:
+   dispatches run 2 from `main`, while `main` is still at the reviewed commit,
+   filling only the two inputs:
 
    ```bash
    gh workflow run "CD promotion" -R aroma-pacifico/aroma-pacifico-infrastructure --ref main -f approve_run_id=<run-id-of-run-1> -f approve_digest=<plan-digest>
@@ -146,11 +154,11 @@ is what the approver reads before dispatching run 2.
 
 | Section of the `review-pdn` summary | Content |
 |---|---|
-| Header table | Plan digest, requester, promoted commit, the commit used as cost "before", release note link, incident reference, change window status. |
+| How to approve | A table with the two inputs of run 2, `approve_run_id` (the identifier of this run) and `approve_digest`, and the statement that the approval is a second run by a person other than the requester. |
+| Header table | Requester, promoted commit, the commit used as cost "before", release note link, incident reference, change window status, plan digest. |
 | Destroys and replacements | Totals over every stack, stated first in prose, as AGENTS.md section 7 requires. |
 | Plan of pdn | One row per stack with the plan result, destroys and replacements; the tail of each plan is in the `plan-pdn` job summary and artifact. |
 | Cost estimate of pdn | Infracost previous monthly cost, new monthly cost, delta and percentage per stack and in total. Reads "estimate unavailable" when `INFRACOST_CLI_TOKEN` is missing, and then contains no figure. |
-| Inputs for run 2 | The exact values of `approve_run_id` and `approve_digest` to use in run 2. |
 
 The plan runs against the Floci emulator with the example variable file of the
 environment, so it proves that the configuration plans cleanly; it is not a plan
@@ -158,23 +166,29 @@ against a live account (ASM-051, PD-019). The cost "before" defaults to the
 parent of the promoted commit, which prices the change being promoted. The
 `base_ref` input changes it, for example to the last commit that was approved.
 
-The job `pdn-approval` of run 2 runs `scripts/cd-verify-approval.sh` and fails
-unless all of the following hold.
+The job `pdn-approval` of run 2 runs `scripts/cd-verify-approval.sh`, which
+stops at the first failing check. The checks run in this order.
 
 | Check | Rule |
 |---|---|
-| Approver is authorized | The person who triggered run 2 (`github.triggering_actor`) is listed in the repository variable `PDN_APPROVERS`. |
-| Two different humans | The approver is not the requester of run 1. |
-| Run 1 is the right run | Run `approve_run_id` is the `CD promotion` workflow, started by `workflow_dispatch`, concluded `success`, on `main`, and on the same commit as run 2. |
-| Digest binds the plan | `approve_digest` equals the SHA-256 digest recomputed from the manifest artifact of run 1. |
-| Change window | The harvest-week window check of `scripts/cd-window-check.sh` passes again at approval time; an incident reference overrides it as in run 1. |
-| Inputs are well formed | `approve_run_id` and `approve_digest` have the expected shape (a run identifier and a SHA-256 digest). |
+| Inputs are well formed | `approve_run_id` is numeric and is not the identifier of the approval run itself; `approve_digest` is 64 hexadecimal characters (upper or lower case). |
+| Approver is authorized | The person who triggered run 2 (`github.triggering_actor`) is listed in the repository variable `PDN_APPROVERS`, compared without regard to case. An empty or unset variable fails with its own message, so nobody can approve until it is set. |
+| Run 1 is the right run | Run `approve_run_id` is the workflow `CD promotion` of this repository, started by `workflow_dispatch`, completed with `success`, on `main`, and on the same commit as run 2. |
+| Artifacts of run 1 | The artifacts `plan-pdn` and `review-context-pdn` can be downloaded. Both expire after 7 days, and the error says so. |
+| Digest binds the plan | The plan files pass `sha256sum --check` against `SHA256SUMS`, and the digest recomputed from that manifest equals `approve_digest`. |
+| Review context | The file `review-context.json` of `review-context-pdn` (keys `requester`, `commit`, `release_note_url`, `incident_reference`, `plan_digest`, `promote_to`) names a requester, has `promote_to = pdn`, and its commit and digest equal those of run 2 and the recomputed digest. |
+| Four eyes | The approver differs from the requester in the context, from the actor of run 1 and from the person who triggered run 1. This is stricter than ASM-172 asks. |
+| Change window | Without an incident reference, the stored release note must be an `https://` link. The check of `scripts/cd-window-check.sh` then passes again at approval time, with the incident reference stored by run 1 as the override. |
 
-Not coded, and open: a maximum age for run 1. Nothing rejects an old review run
-within the retention of its artifacts (the plan artifact is kept 7 days by
-`cd-plan.yml`, which limits it in practice). When every check passes, the job
-writes the artifact `approval-record-pdn` and a job summary (section 5). It
-applies nothing.
+The release note, the incident reference and therefore the window override all
+come from run 1. Run 2 ignores `release_note_url` and `incident_reference` typed
+on it, so an approver cannot add an incident reference of their own. When every
+check passes, the job writes the artifact `approval-record-pdn` and a job
+summary (section 5). It applies nothing.
+
+No explicit maximum age for run 1 is coded, and deciding one is open (section 9).
+In practice the age is bounded by the 7 days that the artifacts of run 1 are
+kept, after which the approval fails on the artifact check.
 
 ## 4. GitHub configuration to apply
 
@@ -207,8 +221,8 @@ shell code only through environment variables.
 |---|---|---|
 | Run 1 page | Actions, the run named by `approve_run_id` | The requester (who triggered the run), the time, the plan and cost review, and the digest. |
 | Run 2 page | Actions, the approval run | The approver (who triggered the run), the time, and that every check of section 3 passed. |
-| Artifact `approval-record-pdn` (90 days) | The page of run 2, "Artifacts" | The requester, the approver, both run URLs, the commit, the plan digest, the release note, the incident reference, the window status and a UTC time. |
-| Job summary of `pdn-approval` | The page of run 2 | The same record rendered in the run. |
+| Artifact `approval-record-pdn` (90 days) | The page of run 2, "Artifacts" | The file `approval-record-pdn.json` with the keys `result`, `nothing_applied`, `requester`, `approver`, `review_run`, `approval_run`, `commit`, `plan_digest`, `release_note`, `incident_reference`, `window_status` and `approval_checked_at_utc`. |
+| Job summary of `pdn-approval` | The page of run 2 | The same record as a table, with the time the checks passed (UTC). |
 
 Read all four as the record of an approved plan review, because nothing is
 deployed. They show two named humans bound to one digest of one commit; they are
@@ -289,7 +303,7 @@ B11 should re-check its pin.
 | Dedupe against B11 (section 8) | A follow-up change; the B11 set, including #12, is merged | B11 and B12 owners |
 | Meaningful plans and costs: today the stacks hold only provider, backend and variables, so every plan reads "no changes" and every estimate is zero | Stack wiring B04b, B06b, B07b, B09b | Task owners |
 | First real dispatch of both runs, including the approval checks, the manifest digest, the Infracost output shape and Floci readiness | A human dispatch after merge; the workflows have never run on GitHub | Human lead |
-| Maximum age of run 1 for the approval | Not coded; to be decided | Human lead |
+| Explicit maximum age of run 1 for the approval | Not coded; today only the 7-day artifact expiry limits it; to be decided | Human lead |
 | Decision-log entries for the choices in this document | ASM-320 to ASM-324 and the closing of PD-020 in `aroma-pacifico-architecture` | Human lead |
 | SVG and PNG export of the Mermaid flow, if the diagram standard is applied strictly | Diagram owner | Diagram owner |
 | Rollback rehearsal in `qa` | PD-176 | SR2 |
