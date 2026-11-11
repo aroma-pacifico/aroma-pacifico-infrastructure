@@ -59,6 +59,15 @@ variables {
     table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-qa-telemetry"
     topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_qa_telemetry"
   }
+
+  # Farm inputs (B08b) are required by the stack; no farm is planned here.
+  farms = {}
+  farm_ingestion = {
+    environment    = "qa"
+    endpoint       = "ingestion.example.invalid"
+    policy_name    = "fixture-qa-device"
+    topic_template = "fixture/qa/telemetry/{thing_name}"
+  }
 }
 
 run "plans_the_four_functions_of_the_design" {

@@ -83,3 +83,33 @@ variable "telemetry_references" {
   })
   description = "Telemetry table read by the threshold function and topic rule allowed to send to its queue. These are the telemetry_table_arn and topic_rule_arn outputs of modules/telemetry-ingestion; B09b replaces this variable with them (see README)."
 }
+
+# Farm inputs (B08b), alphabetical among themselves.
+
+variable "farm_ingestion" {
+  type = object({
+    environment    = string
+    endpoint       = string
+    policy_name    = string
+    topic_template = string
+  })
+  description = "Same-environment ingestion contract of every farm: IoT endpoint hostname, device policy name and topic template with one {thing_name} placeholder. It has the shape of the ingestion output of modules/telemetry-ingestion; B09b replaces this variable with that output (see README)."
+}
+
+variable "farms" {
+  type = map(object({
+    farm_id        = string
+    node_csr_paths = map(string)
+  }))
+  description = "Enrolled farms keyed by a short key of 1 to 4 lowercase alphanumeric characters (it ends up in the node names). Each farm has its opaque platform identifier and the paths, relative to this stack, of the public CSRs of its crop and drying nodes. The examples hold one synthetic farm (ASM-422)."
+
+  validation {
+    condition     = alltrue([for key in keys(var.farms) : can(regex("^[a-z0-9]{1,4}$", key))])
+    error_message = "Each farm key must be 1 to 4 lowercase alphanumeric characters, so that the farm name prefix stays within 21 characters."
+  }
+
+  validation {
+    condition     = alltrue([for farm in values(var.farms) : toset(keys(farm.node_csr_paths)) == toset(["crop", "drying"])])
+    error_message = "Each farm needs exactly the crop and drying node CSR paths."
+  }
+}
