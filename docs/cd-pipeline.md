@@ -176,20 +176,22 @@ perform the restore under an incident reference.
 | Stale lock after a cancelled run | Delete only the `<stack>/terraform.tfstate.tflock` object after confirming that no run is active. |
 | Change that cannot be reverted | The "cannot be rolled back" table of A18 section 10 applies (sack events, telemetry readings, notices already sent, and so on); the handling there is compensation, not revert. |
 
-## 8. Deduplication after B11 lands
+## 8. Deduplication against B11
 
 This workflow is deliberately self-contained so that it works whichever B11
-pull request merges (#9, #10, #11 or #12). When B11 lands, merge the duplicated
-parts into one place.
+pull request merges. Pull requests #9, #10 and #11 are already on `main`
+(`infrastructure-ci.yml`, `infracost.yml`, `floci-plan.yml`); #12, which
+consolidates the same ground, is still open. Once the B11 set is settled, merge
+the duplicated parts into one place.
 
 | Duplicated piece | Here | In B11 |
 |---|---|---|
-| Floci service container, bucket creation, backend flags, plan loop | `cd-plan.yml` | The plan job of `infrastructure-ci.yml` or `floci-plan.yml`. Extract one reusable plan workflow. |
+| Floci service container, bucket creation, backend flags, plan loop | `cd-plan.yml` | `floci-plan.yml`, and the plan job of PR #12 if it lands. Extract one reusable plan workflow. |
 | Checksum-pinned Infracost CLI install and `scan` invocation | `cost` job in `cd-promotion.yml` | `infracost.yml`. Extract a composite action. |
 | Per-stack Infracost project list | Generated at run time per environment | Root `infracost.yml`, which prices `qa` only. |
 | Terraform version read and setup | `cd-plan.yml` | `infrastructure-ci.yml`. |
 
-The `actions/checkout` SHA pinned in the B11 branches
+The `actions/checkout` SHA pinned in the B11 workflows
 (`11d5960a326750d5838078e36cf38b85af677262`, commented v4.2.2) differs from the
 commit that the tag `v4.2.2` resolves to
 (`11bd71901bbe5b1630ceea73d27597364c9af683`), which is what the CD workflows use.
@@ -202,7 +204,7 @@ B11 should re-check its pin.
 | Configure Environment `pdn` with required reviewers, prevent self-review, `main` only | Repository administrator; PD-020 (plan support) | Human lead |
 | Add secret `INFRACOST_CLI_TOKEN`; confirm variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED` | Repository administrator | Human lead |
 | Add variable `HARVEST_WEEK_DATES` | The Federation calendar (ASM-008, PD-005) | Human lead |
-| Dedupe against B11 (section 8) | B11 landing | B11 and B12 owners |
+| Dedupe against B11 (section 8) | Decision on PR #12 versus the merged #9, #10 and #11 | B11 and B12 owners |
 | Meaningful plans and costs: today the stacks hold only provider, backend and variables, so every plan reads "no changes" and every estimate is zero | Stack wiring B04b, B06b, B07b, B09b | Task owners |
 | First real run of the workflows, including the approvals API record, the Infracost output shape and Floci readiness | A human dispatch after merge; none of this has been run | Human lead |
 | Decision-log entries for the choices in this document | `ASM-NNN` and `PD-NNN` numbers to be allocated in `aroma-pacifico-architecture` | Human lead |
