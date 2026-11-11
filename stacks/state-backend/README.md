@@ -1,15 +1,7 @@
-# State backend bootstrap composition
+# state-backend stack (B02, box D02)
 
-The reviewed resource module is verified locally by `python scripts/verify-bootstrap.py --module-root <state-backend-directory>`.
-The script stages the complete `root-template/` in a disposable directory, substitutes only the local module source, excludes the steady-state backend declaration, initializes with `-backend=false`, validates, and runs mock-provider plans for dev, qa and pdn. Each plan has eight creates, zero updates and zero deletes, with four domain outputs. No bucket exists or is contacted.
+Creates the encrypted, versioned state bucket and the customer-managed key of one environment by consuming the `state-backend` module of `aroma-pacifico-terraform-modules` at a git tag (PC-IAC-015, currently `v0.3.0`). The environment comes from `-var-file=../../environments/<env>/<env>.tfvars`; its state is separate from the other environments by bucket, key and name.
 
-`root-template/*.tf.example` is the production consumption template. `REQUIRED_REVIEWED_RELEASE` remains an explicit release gate because no genuine SemVer tag exists. The first bucket must never use itself as a backend. `backend.tf.example` is only a future steady-state declaration after a separately authorized bootstrap and migration; both operations are outside this delivery.
-
-The B01 scaffold files beside this README have no B02 resource invocation. Their successful empty validation is not bootstrap resource evidence. The complete executable offline root is generated from the template, and its resource graph is checked by the script.
-
-```text
-state-backend/
-|-- backend.tf, providers.tf, variables.tf, versions.tf   B01 scaffold
-|-- backends/                                          three inactive S3 examples
-`-- root-template/                                     complete release-gated composition
-```
+- The role inputs are names. The account identifier is read from the caller identity at plan time, so none is committed. The names in the examples are placeholders until B06 provides the real identities.
+- `backend.tf` declares an empty S3 backend. `backends/<env>.s3.tfbackend.example` shows the partial configuration of each environment, with an own state key per domain and native locking (`use_lockfile`). The first apply of this stack would need a bootstrap that is outside the plan-only scope.
+- `tests/state_backend_unit_test.tftest.hcl` checks the plan with a mocked provider: `terraform -chdir=stacks/state-backend test`.
