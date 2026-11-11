@@ -1,5 +1,9 @@
 # D02 / B02 technical evidence
 
+Historical snapshot. See the [2026-11-10 refresh](d02-dependency-refresh.md)
+for current permissions, dependencies and verification; older publication blockers
+and test counts below describe the earlier session.
+
 Owner: JR2. Refs aroma-pacifico/aroma-pacifico-roadmap#22. Status: PARTIAL; retain Draft PR status. Evidence rechecked on 2026-11-06 with Terraform 1.15.8 (windows_amd64). No AWS deployment occurred, no cloud resources were created and no terraform apply/destroy, state migration or force-unlock was executed. Remote AWS backend initialization is not verified.
 
 ## Implemented functionality
