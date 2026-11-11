@@ -162,3 +162,120 @@ jobs:
             plan-${{ matrix.stack }}-pdn.txt
           retention-days: 3
           if-no-files-found: ignore
+
+  # End-to-end plan of the pattern environment (B13, box D13): the four stacks in
+  # dependency order in one job, one summary and one artifact, then the secret
+  # validation over the full history and over the plan JSON.
+  end-to-end:
+    name: End-to-end plan and secret validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      floci:
+        image: floci/floci@sha256:5ee85db604c4aa74ac76e07ea5cc83086f37bb472bf3dbb97e34019e48efae9c
+        ports:
+          - 4566:4566
+    env:
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+    steps:
+      - name: Check out repository with the full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read the pinned Terraform version
+        id: terraform-version
+        run: |
+          version="$(tr -d '[:space:]' < .terraform-version)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Install checksum-pinned gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin_dir="$RUNNER_TEMP/gitleaks-bin"
+          mkdir -p "$bin_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output "$bin_dir/gitleaks.tar.gz"
+          (cd "$bin_dir" && echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz' | sha256sum --check --strict)
+          tar -xzf "$bin_dir/gitleaks.tar.gz" -C "$bin_dir" gitleaks
+          echo "$bin_dir" >> "$GITHUB_PATH"
+
+      # The cost step of scripts/plan-all.sh runs only when the token, the
+      # organization and the metadata egress approval exist (PC-IAC-027); the
+      # checksum-pinned CLI is installed in that case only.
+      - name: Install checksum-pinned Infracost CLI v2
+        id: infracost
+        shell: bash
+        env:
+          INFRACOST_METADATA_EGRESS_APPROVED: ${{ vars.INFRACOST_METADATA_EGRESS_APPROVED }}
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_CLI_TOKEN }}
+          INFRACOST_ORG: ${{ vars.INFRACOST_ORG }}
+        run: |
+          set -euo pipefail
+          if [ "${INFRACOST_METADATA_EGRESS_APPROVED:-}" != "true" ] || [ -z "${INFRACOST_CLI_AUTHENTICATION_TOKEN:-}" ] || [ -z "${INFRACOST_ORG:-}" ]; then
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bin_dir="$RUNNER_TEMP/infracost-bin"
+          mkdir -p "$bin_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/infracost/cli/releases/download/v2.18.3/infracost-linux-amd64.tar.gz \
+            --output "$bin_dir/infracost.tar.gz"
+          (cd "$bin_dir" && echo '0950674d6e19eee5c492e59b415f3078c7c6b72421f940543c6cfa884692874e  infracost.tar.gz' | sha256sum --check --strict)
+          tar -xzf "$bin_dir/infracost.tar.gz" -C "$bin_dir"
+          chmod +x "$bin_dir/infracost"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+          echo "authorized=true" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the emulator
+        shell: bash
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          for i in {1..30}; do
+            if aws s3 ls >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Plan every stack in dependency order
+        shell: bash
+        env:
+          INFRACOST_METADATA_EGRESS_APPROVED: ${{ vars.INFRACOST_METADATA_EGRESS_APPROVED }}
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ steps.infracost.outputs.authorized == 'true' && secrets.INFRACOST_CLI_TOKEN || '' }}
+          INFRACOST_ORG: ${{ vars.INFRACOST_ORG }}
+        run: bash scripts/plan-all.sh --out plan-all-output
+
+      - name: Validate that no state or secret exists
+        shell: bash
+        run: bash scripts/validate-no-secrets.sh plan-all-output
+
+      - name: Keep the plan summary and plan JSON for review
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plan-all
+          path: plan-all-output/
+          retention-days: 3
+          if-no-files-found: ignore

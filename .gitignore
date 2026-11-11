@@ -35,3 +35,6 @@ tfplan
 .vscode/
 .DS_Store
 __MACOSX/
+
+# End-to-end plan output (B13)
+plan-all-output/
