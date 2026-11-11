@@ -1,0 +1,17 @@
+# Inactive until a real reviewed SemVer release is selected. No release is asserted.
+module "state_backend" {
+  source    = "git::https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules.git//modules/state-backend?ref=REQUIRED_REVIEWED_RELEASE"
+  providers = { aws.project = aws.principal }
+
+  client      = local.configuration.client
+  project     = local.configuration.project
+  environment = local.configuration.environment
+
+  name_prefix     = local.name_prefix
+  additional_tags = local.common_tags
+
+  aws_context           = local.configuration.aws_context
+  key_administrators    = local.configuration.key_administrators
+  configuration_readers = local.configuration.configuration_readers
+  domain_access         = local.configuration.domain_access
+}

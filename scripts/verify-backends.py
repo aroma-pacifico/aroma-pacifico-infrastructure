@@ -64,6 +64,8 @@ with tempfile.TemporaryDirectory(prefix="aroma-b02-offline-") as directory:
             configs[("qa", stack)]["kms_key_id"] = configs[("pdn", stack)]["kms_key_id"]
     rejected("shared qa/pdn account", same_account)
     rejected("missing encryption field", lambda configs: configs[("qa", "network")].pop("encrypt"))
+    rejected("missing KMS field", lambda configs: configs[("qa", "network")].pop("kms_key_id"))
+    rejected("missing locking field", lambda configs: configs[("qa", "network")].pop("use_lockfile"))
     write(baseline)
     target = fixture_root / "network/backends/qa.s3.tfbackend"
     target.write_text(target.read_text(encoding="utf-8") + 'bucket = "duplicate"\n', encoding="utf-8")
@@ -79,12 +81,11 @@ with tempfile.TemporaryDirectory(prefix="aroma-b02-offline-") as directory:
             result = subprocess.run([sys.executable, str(root / "scripts/prepare-backend.py"),
                                      "--config-root", str(fixture_root), "--environment", environment,
                                      "--stack", stack], capture_output=True, text=True)
-            assert result.returncode == 0, result.stderr
-            assert str(root / ".terraform-data" / environment / stack) in result.stdout
-            assert str(fixture_root / stack / "backends" / f"{environment}.s3.tfbackend") in result.stdout
-            assert "TF_WORKSPACE = 'default'" in result.stdout
-            assert "-reconfigure" in result.stdout and "-migrate-state" not in result.stdout
-    print("PASS: nine printed init commands use the matching environment/domain cache and config")
+            assert result.returncode != 0, result.stdout
+            expected = 'Bootstrap cannot initialize' if stack == 'state-backend' else 'Operational review requires'
+            assert expected in result.stderr, result.stderr
+            assert 'terraform -chdir=' not in result.stdout
+    print("PASS: twelve unbound environment/domain requests fail closed; bootstrap never prints self-init")
 
     for arguments, diagnostic in [
         (["--environment", "qa"], "Select both"),
@@ -99,6 +100,6 @@ for template in (root / "stacks").glob("*/backends/*.example"):
     result = subprocess.run(["terraform", "fmt", "-check", "-"], input=template.read_text(encoding="utf-8"),
                             capture_output=True, text=True)
     assert result.returncode == 0, (template, result.stdout, result.stderr)
-print("PASS: terraform fmt -check - accepts all nine backend templates through stdin")
+print("PASS: terraform fmt -check - accepts all twelve backend templates through stdin")
 assert backend.quote("a'b") == "'a''b'"
 print("PASS: PowerShell quote escaping")
