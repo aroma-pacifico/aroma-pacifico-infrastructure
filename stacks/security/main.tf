@@ -1,9 +1,8 @@
 # Security domain (box D06, B06b). One call to the reference module, pinned by
 # SemVer tag (PC-IAC-015). All security logic stays in the module; this stack
-# supplies the per-environment values and the provider. The IoT roles of the
-# ingestion rules arrive with v0.5.0, and the pin moves when that tag exists.
+# supplies the per-environment values and the provider.
 module "security" {
-  source = "git::https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules.git//modules/security?ref=v0.4.0"
+  source = "git::https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules.git//modules/security?ref=v0.5.0"
 
   # The module consumes the aws.project alias (PC-IAC-005).
   providers = { aws.project = aws }

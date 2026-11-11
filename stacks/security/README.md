@@ -1,6 +1,6 @@
 # Security stack (box D06, B06b)
 
-Root stack of the security domain. It wires the reference module `modules/security` of [aroma-pacifico-terraform-modules](https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules), pinned by tag `v0.4.0` (PC-IAC-015), into the eight customer-managed keys, the two Cognito user pools with their seven groups, the role of the revocation function and, on request, the secure transport bucket policy. The stack defines no resource of its own: `main.tf` is a single module call, `locals.tf` injects the governance values and turns role names into ARNs, and `variables.tf` takes the per-environment values from `environments/<env>/<env>.tfvars.example`.
+Root stack of the security domain. It wires the reference module `modules/security` of [aroma-pacifico-terraform-modules](https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules), pinned by tag `v0.5.0` (PC-IAC-015), into the eight customer-managed keys, the two Cognito user pools with their seven groups, the role of the revocation function and, on request, the secure transport bucket policy. The stack defines no resource of its own: `main.tf` is a single module call, `locals.tf` injects the governance values and turns role names into ARNs, and `variables.tf` takes the per-environment values from `environments/<env>/<env>.tfvars.example`.
 
 ```text
 stacks/security/
@@ -37,15 +37,16 @@ Only the outputs that later stacks need are exposed (PC-IAC-019 section 3.2). A 
 | `field_user_pool_id`, `field_user_pool_arn`, `staff_user_pool_id`, `staff_user_pool_arn` | API authorizers | Identifiers of the two pools. |
 | `cognito_group_names` | API authorizers | Group name of each role. |
 | `revocation_role_arn`, `revocation_role_name` | revocation function | Role of the function that revokes device and user identities; the name lets its owner attach the basic execution policy. |
+| `iot_rule_role_arn`, `iot_logging_role_arn` | B09b (telemetry-ingestion) | Inputs `rule_role_arn` and `logging_role_arn`. |
 | `secure_transport_policy_statements_json` | bucket owners | Deny statements for plain HTTP and TLS below 1.2, or null. Each bucket owner merges it into its policy. |
 
 `modules/firewall-rules` takes nothing from security except the optional `logs` key above, so no other output is added for B07b.
 
-## Pending outputs (module v0.5.0)
+## IoT roles (module v0.5.0)
 
-`v0.4.0` has no IoT roles. The IoT rule role and the IoT logging role that B09b needs (`rule_role_arn` and `logging_role_arn` of `modules/telemetry-ingestion`) arrive with module tag `v0.5.0`. When that tag exists, the pin in `main.tf` moves to it and `outputs.tf` adds `iot_rule_role_arn` and `iot_logging_role_arn`. Until then B09b receives those two ARNs from its own variable file.
+Tag `v0.5.0` adds the two roles of the telemetry ingestion: the role assumed by the telemetry topic rule and the role that IoT Core uses to write its logs. They are exposed as `iot_rule_role_arn` and `iot_logging_role_arn` and feed the `rule_role_arn` and `logging_role_arn` inputs of `modules/telemetry-ingestion` (B09b).
 
-The `flow_logs` input of the network stack (destination and role) is not produced by `v0.4.0` either; it stays null until a module tag provides them.
+The `flow_logs` input of the network stack (destination and role) is not produced by the module either; it stays null until a module tag provides them.
 
 ## Plan it against Floci
 
@@ -66,7 +67,7 @@ terraform -chdir=stacks/security plan -lock=false \
   -var-file=../../environments/qa/qa.tfvars.example
 ```
 
-Each environment plans 27 resources to add, 0 to change and 0 to destroy: 8 keys, 8 aliases, 2 user pools, 7 groups, the revocation role with its policy, and one policy document read at apply time. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
+Each environment plans 29 resources to add, 0 to change and 0 to destroy: 8 keys, 8 aliases, 2 user pools, 7 groups, the revocation role with its policy, and one policy document read at apply time. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
 
 ## Verification
 

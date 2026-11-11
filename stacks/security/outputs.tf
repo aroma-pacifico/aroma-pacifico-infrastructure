@@ -1,6 +1,5 @@
 # Minimal outputs for the stacks that build on security (PC-IAC-019 section 3.2):
 # firewall rules (B07b), telemetry ingestion (B09b) and the function stack (B10).
-# The IoT role outputs are added when the module tag that creates them is adopted.
 
 output "cognito_group_names" {
   description = "Cognito group name of each role, keyed by role."
@@ -15,6 +14,16 @@ output "field_user_pool_arn" {
 output "field_user_pool_id" {
   description = "ID of the field user pool."
   value       = module.security.field_user_pool_id
+}
+
+output "iot_logging_role_arn" {
+  description = "ARN of the role that AWS IoT Core assumes to write its logs, for the logging_role_arn input of telemetry ingestion (B09b)."
+  value       = module.security.iot_logging_role_arn
+}
+
+output "iot_rule_role_arn" {
+  description = "ARN of the role that the telemetry topic rule assumes, for the rule_role_arn input of telemetry ingestion (B09b)."
+  value       = module.security.iot_rule_role_arn
 }
 
 output "kms_key_arns" {
