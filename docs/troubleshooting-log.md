@@ -1,68 +1,21 @@
 # Troubleshooting log
 
-## D05 local verification context (2026-11-07)
+## Floci refused the plan roles of the association providers (B05)
 
-**Context and symptom:** `gh auth status` returned invalid authentication and
-Git refused repository ownership under the sandbox Windows account. TFLint,
-Checkov and Trivy were initially absent. PowerShell release queries failed with
-an unexpected connection receive error in the sandbox.
+**Symptom:** `terraform plan` of `stacks/network` against the Floci emulator failed in both aliased providers with `Cannot assume IAM Role` and `AccessDenied` on `sts:AssumeRole`.
 
-**Root cause:** The sandbox identity has a separate keyring and owns none of
-the user's repositories. Tool availability and network behavior differ between
-the sandbox and the authenticated Windows user.
+**Root cause:** The emulator enforces IAM, so a role that was never created cannot be assumed, even with fictitious account `000000000000`.
 
-**Resolution applied:** Repeated GitHub/Git access and failed release queries
-with approved execution as the authenticated user. No credentials or global
-safe-directory settings were changed. Local tool binaries are downloaded from
-official releases and checked against their published SHA-256 checksums.
-An initial Python package installation produced no progress and was stopped;
-retrying with bounded network timeouts installed the PDF/HCL readers locally.
-PowerShell-to-gh jq quoting errors were corrected by selecting JSON fields in
-PowerShell, and a console encoding error by rendering source excerpts as ASCII.
+**Resolution applied:** The `Floci plan` workflow reads the fictitious role ARNs from `stacks/<stack>/emulator.tfvars` and creates each role inside the emulator before the plan. The roles exist only in the throwaway container.
 
-**Preventive architecture:** Keep verification aids under ignored `.local/`,
-use structured JSON with bounded output for evidence, and distinguish absent
-tools from executed checks. The tracked D05 verifier uses only Python's
-standard library and Terraform, with explicit plan-only fixtures and timeouts.
+**Preventive architecture:** A stack that adds provider aliases with `assume_role` keeps its fixtures in `emulator.tfvars`; the workflow creates their roles. No real role or account is referenced.
 
-## D05 security scan fixture
+## Secret scan rejected the emulator fixtures (B05)
 
-**Context and symptom:** Trivy warned that required variables were absent.
-A follow-up command failed because Python inline-code quoting prevented the
-local fixture from being written, and the scanner reported a missing file.
+**Symptom:** `scripts/check-env-secrets.sh` reported an account identifier in `emulator.tfvars`.
 
-**Root cause:** Static configuration scanning needs variable values; Windows
-PowerShell argument quoting altered embedded Python string literals.
+**Root cause:** The scanner reports every 12-digit number, including the all-zero account that Floci answers with.
 
-**Resolution applied:** Wrote the ignored fixture directly and reran Trivy to
-a new report path. The final scan exited 0 with 51 successes and zero failures,
-without the missing-variable warning.
+**Resolution applied:** The scanner ignores only `000000000000`, which names no account. Any other 12-digit value is still reported.
 
-**Preventive architecture:** Use files for structured multiline inputs and
-gate report consumption on command success. An older report is not evidence
-for a later failed invocation.
-
-## D05 GitHub publication permissions
-
-**Context and symptom:** The authorized feature-branch push failed with HTTP
-403, `Write access to repository not granted`, despite successful CLI login.
-
-**Root cause:** GitHub reports `pull: true` and `push: false` for the authenticated
-account on the infrastructure repository.
-
-**Resolution applied:** Preserved the commits locally and prepared the Draft
-PR body. Published the authorized progress comment and sanitized evidence on
-roadmap issue #25, which remained open. No PR was created.
-
-**Preventive architecture:** Verify repository write access before publication;
-valid authentication alone does not establish push permission. A maintainer must
-restore access or publish the reviewed commits through the normal PR workflow.
-
-
-## B05 final plan-only delivery, 2026-11-11
-
-Context and symptom: current main advanced after the earlier audit. Baseline merges preserved the existing feature commits, resolved README/root overlaps, and retained reviewed teammate modules unchanged. Offline verification exposed validation cycles, fixture syntax/argument quoting and inherited provider-lock/cache mismatches.
-
-Root cause and resolution: B05 overlap validation now evaluates its input directly without a local-value cycle. Fixture blocks and PowerShell arguments were corrected. Expected Terraform diagnostic labels are checked explicitly. Positive graph inventories are evaluated separately from expected validation-error plans, with all required positive runs mandatory. B08 adds topic/policy regressions. B02 bootstrap tests now cover all environments. Original failed commands remain in the delivery evidence; operational caches and the shared launcher were left unchanged.
-
-Preventive controls: use the approved launcher in a disposable isolated context; remove AWS credentials; initialize only with `-backend=false -input=false`; retain immutable provider locks; validate child aliases through complete roots; assert exact managed resource families and zero updates/deletes. Never treat a zero-resource selection plan as connection evidence.
+**Preventive architecture:** Keep fixtures all-zero so they stay distinguishable from a leaked identifier.
