@@ -15,10 +15,11 @@ This repository is plan-only: nothing here may run `terraform apply` or `terrafo
 ```text
 aroma-pacifico-infrastructure/
 |-- .github/
-|   `-- workflows/          pr-conventions.yml now; CI (B11) and CD (B12) workflows are added here
+|   `-- workflows/          pr-conventions.yml; CI (B11) workflows; CD (B12) cd-promotion.yml and cd-plan.yml
 |-- .terraform-version      exact Terraform patch used by local runs and CI
 |-- docs/
 |   |-- case/               case statement, the sole source of requirements
+|   |-- cd-pipeline.md      CD promotion runbook: approval, evidence, notice, rollback (B12)
 |   `-- diagram-boxes.md    map of diagram boxes D01 to D13 to this repository
 |-- environments/
 |   |-- dev/                per-environment variable and backend files (B02, B03)
@@ -63,6 +64,10 @@ Repeat the `init` and `validate` pair for `state-backend`, `security` and `workl
 ## Terraform version
 
 CI and local runs use Terraform 1.15.8, the patch release recorded in `.terraform-version` (ADR-003 asks B01 to record one exact patch at or above the `>= 1.14.0` floor). Provider locks include hashes for Linux, macOS and Windows so that CI on Linux and local runs on other systems resolve the same provider build.
+
+## CD promotion
+
+Promotion `dev`, `qa`, `pdn` with a mandatory production approval, the plan and Infracost cost delta shown to the approver, and the evidence of who approved is described in [docs/cd-pipeline.md](docs/cd-pipeline.md). The pipeline is plan-only: the approval gate approves a reviewed plan and nothing is applied.
 
 ## Diagram boxes
 
