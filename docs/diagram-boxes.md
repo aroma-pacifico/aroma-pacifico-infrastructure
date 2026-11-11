@@ -14,7 +14,7 @@ definition of each box is in section 14 of the architecture document of
 | D04 | B04 | [roadmap#24](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/24) | Module in the modules repository, wired in `stacks/network/` |
 | D05 | B05 | [roadmap#25](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/25) | Module in the modules repository, wired in the root stack that B05 selects |
 | D06 | B06 | [roadmap#26](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/26) | Module in the modules repository, wired in `stacks/security/` |
-| D07 | B07 | [roadmap#27](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/27) | Module in the modules repository, wired in `stacks/network/` and `stacks/security/` |
+| D07 | B07 | [roadmap#27](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/27) | Module in the modules repository, wired in `stacks/security/` |
 | D08 | B08 | [roadmap#28](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/28) | Module in the modules repository, wired in `stacks/workload/` |
 | D09 | B09 | [roadmap#29](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/29) | Module in the modules repository, wired in `stacks/workload/` |
 | D10 | B10 | [roadmap#30](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/30) | Module in the modules repository, wired in `stacks/workload/` |
