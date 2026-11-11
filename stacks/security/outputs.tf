@@ -1,5 +1,6 @@
 # Minimal outputs for the stacks that build on security (PC-IAC-019 section 3.2):
-# firewall rules (B07b), telemetry ingestion (B09b) and the function stack (B10).
+# telemetry ingestion (B09b) and the function stack (B10). The firewall rules (B07b)
+# are wired in this stack, so their outputs are listed further down.
 
 output "cognito_group_names" {
   description = "Cognito group name of each role, keyed by role."
@@ -27,7 +28,7 @@ output "iot_rule_role_arn" {
 }
 
 output "kms_key_arns" {
-  description = "ARN of each customer-managed key, keyed by data class. B09b takes telemetry and logs, B10 and B13 take records, objects and logs, B07b takes logs for the web ACL log destination."
+  description = "ARN of each customer-managed key, keyed by data class. B09b takes telemetry and logs, B10 and B13 take records, objects and logs."
   value       = module.security.kms_key_arns
 }
 
