@@ -30,7 +30,7 @@ aroma-pacifico-infrastructure/
 |-- stacks/
 |   |-- state-backend/      state bucket and key per environment, backend examples (B02, box D02)
 |   |-- network/            network domain (B04, box D04)
-|   |-- security/           security domain (B06, box D06)
+|   |-- security/           security domain: keys, pools, firewall rules (B06, B07, boxes D06, D07)
 |   `-- workload/           farm, ingestion and inference function (B08 to B10)
 `-- standards/              distributed engineering standards
 ```
