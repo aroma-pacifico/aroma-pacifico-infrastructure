@@ -79,6 +79,19 @@ jobs:
           mkdir -p "$TF_PLUGIN_CACHE_DIR"
           aws s3 mb s3://floci-plan-state
 
+      # A stack whose providers assume a role (box D05) lists fictitious plan
+      # roles in its emulator.tfvars; the emulator enforces IAM, so each role is
+      # created inside the emulator before the plan. No real role is involved.
+      - name: Create the emulator plan roles
+        shell: bash
+        run: |
+          file="stacks/$STACK/emulator.tfvars"
+          [ -f "$file" ] || exit 0
+          trust='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"*"},"Action":"sts:AssumeRole"}]}'
+          grep -oE 'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9_-]+' "$file" | sort -u | while read -r arn; do
+            aws iam create-role --role-name "${arn##*/}" --assume-role-policy-document "$trust" > /dev/null
+          done
+
       - name: Initialize against the emulator (terraform init)
         shell: bash
         run: |
@@ -91,18 +104,24 @@ jobs:
             -backend-config="skip_requesting_account_id=true" \
             -backend-config="skip_metadata_api_check=true"
 
+      # A stack may add synthetic fixtures (emulator.tfvars) that complete or
+      # override the qa example variables, for instance the pdn-only D05 link.
       - name: Plan with the qa example variables (terraform plan)
         shell: bash
         run: |
+          var_files=(-var-file=../../environments/qa/qa.tfvars.example)
+          if [ -f "stacks/$STACK/emulator.tfvars" ]; then
+            var_files+=(-var-file=emulator.tfvars)
+          fi
           terraform -chdir="stacks/$STACK" plan -lock=false -input=false -no-color \
-            -var-file=../../environments/qa/qa.tfvars.example | tee "plan-$STACK.txt"
+            "${var_files[@]}" | tee "plan-$STACK.txt"
 
       - name: Publish the plan summary
         if: always()
         shell: bash
         run: |
           {
-            echo "### Terraform plan of $STACK (Floci emulator, qa example variables)"
+            echo "### Terraform plan of $STACK (Floci emulator, example variables and emulator fixtures)"
             if [ -f "plan-$STACK.txt" ]; then
               result="$(grep -E '^(Plan:|No changes\.)' "plan-$STACK.txt" | head -1 || true)"
               echo "Result: ${result:-no plan summary line found}"

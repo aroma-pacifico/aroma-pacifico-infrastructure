@@ -15,6 +15,9 @@ value_pattern='AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|(^|[^0-9])[0-9]{12}([^0
 while IFS= read -r -d '' file; do
   # Ignore comment-only lines so guidance text can name the forbidden words.
   body="$(grep -vE '^[[:space:]]*(#|//)' "$file" || true)"
+  # The all-zero account is the fixed synthetic value of the Floci emulator
+  # (PC-IAC-028): it names no account, so it is not reported.
+  body="$(sed -E 's/(^|[^0-9])0{12}([^0-9]|$)/\1\2/g' <<<"$body")"
   if grep -qiE "$key_pattern" <<<"$body"; then
     echo "ERROR: $file assigns a secret-looking key" >&2
     status=1
