@@ -102,7 +102,7 @@ CI and local runs use Terraform 1.15.8, the patch release recorded in `.terrafor
 
 ## Collection center association (B05, box D05)
 
-`stacks/network` also composes the single collection center association: one approved center (`cauca`, `huila` or `tolima`) per run, linked to the pdn environment through the `collection-center-association` module, which is consumed by git tag from the modules repository. The root owns the approved departmental catalog, the two plan-role providers and the B07 routing outputs. See [docs/b05-final-delivery.md](docs/b05-final-delivery.md) and [stacks/network/README.md](stacks/network/README.md).
+`stacks/network` can also compose one collection center association (`cauca`, `huila` or `tolima`) for the pdn environment through the `collection-center-association` module, consumed by git tag. See [docs/b05-final-delivery.md](docs/b05-final-delivery.md) and [stacks/network/README.md](stacks/network/README.md).
 
 ## Diagram boxes
 

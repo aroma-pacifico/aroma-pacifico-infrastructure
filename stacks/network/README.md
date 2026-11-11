@@ -26,6 +26,7 @@ stacks/network/
 | `data_store_ports` | `list(number)` | tfvars | Ports the application tier may reach in the data tier (CL-DAT-02). |
 | `interface_endpoints` | `map(object)` | tfvars | Interface endpoints by short key (service suffix and tier). |
 | `flow_logs` | `object` | security stack (B06b) | CloudWatch Logs destination and role; null disables the flow log. |
+| `center_association` | `object` | tfvars or pipeline | Optional single-center association of pdn (B05). Null creates none. |
 | `organization_id` | `string` | `TF_VAR_organization_id` | Organization admitted by the gateway endpoint policies. Never stored in a variable file. |
 
 ## Overlap guard
@@ -70,6 +71,21 @@ terraform -chdir=stacks/network plan -lock=false \
 ```
 
 Each environment plans 163 resources to add, 0 to change and 0 to destroy. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
+
+## Single collection center association (B05, box D05)
+
+`main.tf` also calls `modules/collection-center-association`, pinned by tag `v0.4.0` (PC-IAC-015), when `center_association` is set. The variable is null by default, so dev, qa and the plain pdn example plan exactly as before. One object selects one center (`cauca`, `huila` or `tolima`); its /16 is read from `collection_centers`, so the approved addressing block cannot be contradicted, and the module is instantiated from a one-key map, so at most one association exists per run. Other keys, including Buenaventura, fail validation. Permanent links exist only in pdn (ASM-121): any other `environment` fails validation.
+
+The module receives the VPC of the `network` module directly (`vpc_id`, `vpc_cidr_block`, `transit_attachment_subnet_ids`) and two provider aliases, as PC-IAC-005 requires.
+
+| Alias | Account | Owns |
+|---|---|---|
+| `principal` | Workload (VPC owner) | Transit Gateway VPC attachment |
+| `network` | Hub | Customer gateway, VPN connection, prefix list, attachment accepter when the accounts differ |
+
+Each alias asserts its account with `allowed_account_ids` and assumes an externally supplied plan role. No route, firewall rule, Transit Gateway or certificate is created here: `association_routing_references` exposes the attachment, VPN, customer gateway and prefix list references that B07 consumes. The hub account, Transit Gateway and ACM certificate are external references, and the Transit Gateway must be shared with the workload account (RAM) beforehand.
+
+`tests/association.tftest.hcl` covers the three centers, the default without association, and the rejections (unknown center, Buenaventura, plan role outside its account, dev, qa). `emulator.tfvars` holds synthetic fixtures (all-zero account, placeholder references) for the pdn plan against Floci: with `environments/pdn/pdn.tfvars.example` it plans 167 resources, the 163 of the network plus the 4 of the association. The `Floci plan` workflow creates the two fictitious plan roles inside the emulator before it plans.
 
 ## Verification
 
