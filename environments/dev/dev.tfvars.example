@@ -16,8 +16,8 @@ environment = "dev"
 # CostCenter is one of farms, drones, collection-centers, trips or shared
 # (ASM-064).
 common_tags = {
-  Client      = "clipd070"
-  Project     = "prjpd070"
+  Client      = "clnt"
+  Project     = "proj"
   Environment = "dev"
   Owner       = "SR1"
   CostCenter  = "shared"
