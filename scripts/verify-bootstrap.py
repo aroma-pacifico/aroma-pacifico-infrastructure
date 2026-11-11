@@ -60,17 +60,30 @@ def main():
         output = execute(directory, 'test', '-json', '-verbose', '-no-color')
         events = [json.loads(line) for line in output.splitlines()]
         summary = next(e['test_summary'] for e in events if e.get('type') == 'test_summary')
-        if summary['passed'] != 2 or summary['failed']:
+        if summary['passed'] != 4 or summary['failed']:
             raise RuntimeError(str(summary))
-        plan = next(e['test_plan'] for e in events if e.get('type') == 'test_plan')
-        changes = plan['resource_changes']
-        if Counter(c['type'] for c in changes) != Counter({kind: 1 for kind in required}) or not all(c['change']['actions'] == ['create'] for c in changes):
-            raise RuntimeError('Unexpected bootstrap graph')
+        configurations = []
+        expected_runs = {'bootstrap_without_backend', 'dev_bootstrap_without_backend', 'pdn_bootstrap_without_backend'}
+        observed = set()
+        for event in events:
+            if event.get('type') != 'test_plan' or event['@testrun'] not in expected_runs:
+                continue
+            observed.add(event['@testrun'])
+            plan = event['test_plan']
+            changes = plan['resource_changes']
+            if Counter(c['type'] for c in changes) != Counter({kind: 1 for kind in required}) or not all(c['change']['actions'] == ['create'] for c in changes):
+                raise RuntimeError('Unexpected bootstrap graph')
+            config = plan['output_changes']['backend_configuration']['after']
+            configurations.append(config)
+            print(f"OFFLINE MOCKED TERRAFORM PLAN private bootstrap / {event['@testrun']}: creates=8, updates=0, deletes=0; four domains; assertions PASS")
+        assert observed == expected_runs
+        for field in ['bucket', 'kms_key_id', 'allowed_account_ids']:
+            assert len({str(next(iter(config.values()))[field]) for config in configurations}) == 3, field
         if list(directory.rglob('*.tfstate*')):
             raise RuntimeError('Unexpected fixture state')
-        print('PASS private root: two native scenarios; one environment, eight mocked creates, zero destroys/replacements')
+        print('PASS private root: four native scenarios; three isolated environments, eight mocked creates each, zero destroys/replacements')
         print('PASS source substitution is restricted to a temporary development fixture; inactive release template unchanged')
-        print('BLOCKED production root: real reviewed SemVer release, B01/B03/B06 and bootstrap authorization are absent')
+        print('PARTIAL shared-root consumption: reviewed SemVer release and concrete owner contracts remain pending; bootstrap execution is outside plan-only scope')
 
 if __name__ == '__main__':
     main()

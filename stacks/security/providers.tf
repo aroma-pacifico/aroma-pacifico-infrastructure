@@ -5,6 +5,6 @@ provider "aws" {
   region = var.aws_region
 
   default_tags {
-    tags = var.common_tags
+    tags = merge(var.common_tags, { Environment = var.environment })
   }
 }
