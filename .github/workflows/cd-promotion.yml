@@ -1,0 +1,385 @@
+name: CD promotion
+
+# Controlled promotion dev -> qa -> pdn with a mandatory production approval
+# (B12, ADR-003, automation-and-pipelines.md sections 4 and 8, PC-IAC-027/028).
+#
+# PLAN-ONLY: this project stops at the speculative plan (AGENTS.md section 4).
+# No job here, or in any workflow, runs a state-changing Terraform command; the
+# guard job fails the run if one appears. The pdn Environment gate sits exactly
+# where an apply job would depend on it and approves the reviewed plan digest.
+#
+# Self-contained: depends on no B11 workflow. Runbook: docs/cd-pipeline.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "stacks/**"
+      - "environments/**"
+      - ".terraform-version"
+      - "scripts/cd-*"
+      - ".github/workflows/cd-*.yml"
+  workflow_dispatch:
+    inputs:
+      promote_to:
+        description: Highest environment to promote to (pdn needs a release note or an incident reference)
+        type: choice
+        options: [qa, pdn]
+        default: qa
+      base_ref:
+        description: Commit for the cost "before" estimate (empty means the parent of the promoted commit)
+        type: string
+        default: ""
+      release_note_url:
+        description: HTTPS link to the infrastructure release note with the notice fields (required for pdn)
+        type: string
+        default: ""
+      incident_reference:
+        description: Incident reference that overrides the harvest-week window and the release note rule
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# A newer merge supersedes a run still waiting for approval. Safe only because
+# this workflow never applies; an apply job, if ever added, needs its own group
+# with cancel-in-progress false (design section 4.4).
+concurrency:
+  group: cd-promotion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Plan-only guard and scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      promote_to: ${{ steps.scope.outputs.promote_to }}
+      cost_environments: ${{ steps.scope.outputs.cost_environments }}
+      base_sha: ${{ steps.scope.outputs.base_sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fail if any workflow runs a state-changing Terraform command
+        run: |
+          pattern='terraform[[:space:]]+(-chdir=[^[:space:]]+[[:space:]]+)?(app[l]y|destr[o]y)|-auto-appro[v]e'
+          if grep -rEn "$pattern" .github/workflows scripts; then
+            echo "::error::A workflow or script runs a state-changing Terraform command. The project is plan-only."
+            exit 1
+          fi
+          echo "No state-changing Terraform command found in .github/workflows or scripts."
+
+      - name: Resolve the promotion scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT_PROMOTE_TO: ${{ inputs.promote_to }}
+          INPUT_BASE_REF: ${{ inputs.base_ref }}
+          INPUT_RELEASE_NOTE: ${{ inputs.release_note_url }}
+          INPUT_INCIDENT: ${{ inputs.incident_reference }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          promote_to=qa
+          if [ "$EVENT" = workflow_dispatch ]; then
+            if [ "$REF" != refs/heads/main ]; then
+              echo "::error::Promotion runs only from main (ref is $REF)."; exit 1
+            fi
+            promote_to="$INPUT_PROMOTE_TO"
+          fi
+          if [ "$promote_to" = pdn ] && [ -z "$INPUT_INCIDENT" ]; then
+            case "$INPUT_RELEASE_NOTE" in
+              https://*) ;;
+              *) echo "::error::pdn needs release_note_url (https://) or an incident_reference."; exit 1 ;;
+            esac
+          fi
+          base="$INPUT_BASE_REF"
+          if [ -z "$base" ] && [ "$EVENT" = push ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base="$PUSH_BEFORE"
+          fi
+          base_sha="$(git rev-parse --verify "${base:-HEAD~1}^{commit}")"
+          envs='["qa"]'
+          if [ "$promote_to" = pdn ]; then envs='["qa","pdn"]'; fi
+          {
+            echo "promote_to=$promote_to"
+            echo "cost_environments=$envs"
+            echo "base_sha=$base_sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "Promoting commit $GITHUB_SHA through dev, qa$([ "$promote_to" = pdn ] && echo ', pdn')." >> "$GITHUB_STEP_SUMMARY"
+
+  plan-dev:
+    name: Plan dev
+    needs: guard
+    uses: ./.github/workflows/cd-plan.yml
+    with:
+      environment: dev
+
+  plan-qa:
+    name: Plan qa
+    needs: [guard, plan-dev]
+    uses: ./.github/workflows/cd-plan.yml
+    with:
+      environment: qa
+
+  plan-pdn:
+    name: Plan pdn
+    needs: [guard, plan-qa]
+    if: needs.guard.outputs.promote_to == 'pdn'
+    uses: ./.github/workflows/cd-plan.yml
+    with:
+      environment: pdn
+
+  cost:
+    name: Cost estimate (${{ matrix.environment }})
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(needs.guard.outputs.cost_environments) }}
+    env:
+      ENVIRONMENT: ${{ matrix.environment }}
+      BASE_SHA: ${{ needs.guard.outputs.base_sha }}
+    steps:
+      - name: Check out the promoted commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: head
+          persist-credentials: false
+
+      - name: Check out the before commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.guard.outputs.base_sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Check prerequisites
+        id: ready
+        env:
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_CLI_TOKEN }}
+          INFRACOST_ORG: ${{ vars.INFRACOST_ORG }}
+          INFRACOST_METADATA_EGRESS_APPROVED: ${{ vars.INFRACOST_METADATA_EGRESS_APPROVED }}
+        run: |
+          reason=""
+          if [ -z "${INFRACOST_CLI_AUTHENTICATION_TOKEN:-}" ]; then
+            reason="The secret INFRACOST_CLI_TOKEN is not available to this run."
+          elif [ "${INFRACOST_CLI_AUTHENTICATION_TOKEN#ico-}" != "$INFRACOST_CLI_AUTHENTICATION_TOKEN" ]; then
+            reason="The configured token is a legacy ico- key; a CLI v2 token is required (PC-IAC-027)."
+          elif [ -z "${INFRACOST_ORG:-}" ] || [ "${INFRACOST_METADATA_EGRESS_APPROVED:-}" != "true" ]; then
+            reason="Variables INFRACOST_ORG and INFRACOST_METADATA_EGRESS_APPROVED=true are not both set."
+          fi
+          if [ -n "$reason" ]; then
+            echo "estimate unavailable: $reason"
+            python3 head/scripts/cd-cost-summary.py --environment "$ENVIRONMENT" --unavailable "$reason" --out "cost-$ENVIRONMENT.md" > /dev/null
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the checksum-pinned Infracost CLI v2
+        if: steps.ready.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          bin_dir="$RUNNER_TEMP/infracost-bin"
+          mkdir -p "$bin_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/infracost/cli/releases/download/v2.18.3/infracost-linux-amd64.tar.gz \
+            --output "$bin_dir/infracost.tar.gz"
+          (cd "$bin_dir" && echo '0950674d6e19eee5c492e59b415f3078c7c6b72421f940543c6cfa884692874e  infracost.tar.gz' | sha256sum --check --strict)
+          tar -xzf "$bin_dir/infracost.tar.gz" -C "$bin_dir"
+          chmod +x "$bin_dir/infracost"
+          "$bin_dir/infracost" --version
+
+      - name: Estimate before and after (no cloud credentials)
+        if: steps.ready.outputs.ready == 'true'
+        env:
+          INFRACOST_CLI_AUTHENTICATION_TOKEN: ${{ secrets.INFRACOST_CLI_TOKEN }}
+          INFRACOST_ORG: ${{ vars.INFRACOST_ORG }}
+          INFRACOST_METADATA_EGRESS_APPROVED: ${{ vars.INFRACOST_METADATA_EGRESS_APPROVED }}
+        run: |
+          set -uo pipefail
+          bin="$RUNNER_TEMP/infracost-bin/infracost"
+          work="$RUNNER_TEMP/infracost-work"
+          mkdir -p "$work/config" "$work/cache"
+          export XDG_CONFIG_HOME="$work/config" XDG_CACHE_HOME="$work/cache" GIT_TERMINAL_PROMPT=0
+
+          # One project per stack, priced with the example variables of this environment.
+          scan() {
+            local dir="$1" out="$2"
+            { echo "version: 0.1"; echo "projects:"; } > "$dir/infracost.yml"
+            for stack in "$dir"/stacks/*/; do
+              ls "$stack"*.tf >/dev/null 2>&1 || continue
+              name="$(basename "$stack")"
+              printf '  - name: stacks/%s\n    path: stacks/%s\n    terraform_var_files: [../../environments/%s/%s.tfvars.example]\n' \
+                "$name" "$name" "$ENVIRONMENT" "$ENVIRONMENT" >> "$dir/infracost.yml"
+            done
+            if ! grep -q 'name:' "$dir/infracost.yml"; then
+              echo '{"projects":[]}' > "$out"
+              return 0
+            fi
+            (cd "$dir" && "$bin" scan . --org "$INFRACOST_ORG" --currency USD --json --no-color --access-token-use-cache=false) \
+              > "$out" 2>/dev/null || rm -f "$out"
+          }
+
+          scan base "$work/base.json"
+          scan head "$work/head.json"
+          python3 head/scripts/cd-cost-summary.py --environment "$ENVIRONMENT" \
+            --base-json "$work/base.json" --head-json "$work/head.json" \
+            --base-sha "$BASE_SHA" --head-sha "$GITHUB_SHA" --out "cost-$ENVIRONMENT.md" > /dev/null
+
+      - name: Publish the cost estimate to the job summary
+        run: cat "cost-$ENVIRONMENT.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the cost estimate for the approval review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cost-${{ matrix.environment }}
+          path: cost-${{ matrix.environment }}.md
+          retention-days: 7
+
+  review-pdn:
+    name: Production review (plan and cost)
+    needs: [guard, plan-pdn, cost]
+    if: needs.guard.outputs.promote_to == 'pdn'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      plan_digest: ${{ steps.digest.outputs.plan_digest }}
+    env:
+      HARVEST_WEEK_DATES: ${{ vars.HARVEST_WEEK_DATES }}
+      INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
+      RELEASE_NOTE_URL: ${{ inputs.release_note_url }}
+    steps:
+      - name: Check out the scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Download the pdn plan and the pdn cost estimate
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{plan,cost}-pdn"
+          path: review
+
+      - name: Check the change window
+        id: window
+        run: bash scripts/cd-window-check.sh
+
+      - name: Record the plan digest
+        id: digest
+        run: |
+          digest="$(sha256sum review/plan-pdn/SHA256SUMS | cut -d' ' -f1)"
+          echo "plan_digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Write the review the approver reads before approving
+        env:
+          WINDOW_STATUS: ${{ steps.window.outputs.window_status }}
+          PLAN_DIGEST: ${{ steps.digest.outputs.plan_digest }}
+          BASE_SHA: ${{ needs.guard.outputs.base_sha }}
+        run: |
+          read -r destroys replaced < <(awk -F'|' 'NR>2 {d+=$4; r+=$5} END {print d+0, r+0}' review/plan-pdn/summary-pdn.md)
+          {
+            echo "## Production approval review"
+            echo
+            echo "Approve or reject in the job **Production approval** of this run. Nothing is applied by approving: the project is plan-only."
+            echo
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Cost before commit | \`$BASE_SHA\` |"
+            echo "| Release note | ${RELEASE_NOTE_URL:-none} |"
+            echo "| Incident reference | ${INCIDENT_REFERENCE:-none} |"
+            echo "| Change window | $WINDOW_STATUS |"
+            echo "| Plan digest (SHA-256 of SHA256SUMS) | \`$PLAN_DIGEST\` |"
+            echo
+            echo "Resources to destroy: **$destroys**. Resources to replace: **$replaced**."
+            echo
+            echo "### Plan of pdn"
+            cat review/plan-pdn/summary-pdn.md
+            echo
+            cat review/cost-pdn/cost-pdn.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pdn-approval:
+    name: Production approval
+    needs: [guard, review-pdn]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Required reviewers on this Environment make the approval mandatory, and
+    # GitHub records who approved and when. Configure it in repository settings.
+    environment:
+      name: pdn
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARVEST_WEEK_DATES: ${{ vars.HARVEST_WEEK_DATES }}
+      INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
+      RELEASE_NOTE_URL: ${{ inputs.release_note_url }}
+      REVIEWED_DIGEST: ${{ needs.review-pdn.outputs.plan_digest }}
+    steps:
+      - name: Check out the scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Download the reviewed plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan-pdn
+          path: plan-pdn
+
+      - name: Verify the approval binds the reviewed plan
+        run: |
+          set -euo pipefail
+          (cd plan-pdn && sha256sum --check --strict SHA256SUMS)
+          actual="$(sha256sum plan-pdn/SHA256SUMS | cut -d' ' -f1)"
+          if [ "$actual" != "$REVIEWED_DIGEST" ]; then
+            echo "::error::The plan changed between the review and the approval."; exit 1
+          fi
+
+      - name: Re-check the change window at approval time
+        run: bash scripts/cd-window-check.sh
+
+      - name: Record who approved and when
+        run: |
+          set -uo pipefail
+          approvals="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" 2>/dev/null)" || approvals='[]'
+          printf '%s' "$approvals" | jq -e 'type == "array"' >/dev/null 2>&1 || approvals='[]'
+          jq -n --argjson approvals "$approvals" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg commit "$GITHUB_SHA" --arg digest "$REVIEWED_DIGEST" \
+            --arg note "$RELEASE_NOTE_URL" --arg incident "$INCIDENT_REFERENCE" \
+            --arg recorded "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{run: $run, commit: $commit, plan_digest: $digest, release_note: $note, incident_reference: $incident,
+              recorded_at_utc: $recorded,
+              approvals: [$approvals[] | {approver: .user.login, state: .state, comment: .comment}]}' \
+            > approval-record-pdn.json
+          {
+            echo "## Production approval record (plan-only, nothing applied)"
+            echo
+            echo '```json'
+            cat approval-record-pdn.json
+            echo '```'
+            echo
+            echo "The job starts right after the approval, so recorded_at_utc follows it by seconds. The exact approval time is in the run review history and the pdn deployment history."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the approval record
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approval-record-pdn
+          path: approval-record-pdn.json
+          retention-days: 90
