@@ -55,3 +55,15 @@ output "vpc_id" {
   description = "ID of the environment VPC."
   value       = module.network.vpc_id
 }
+
+output "association_routing_references" {
+  description = "Public references of the selected center connection for B07 (attachments, VPN, customer gateway, prefix list); null when no association is selected. No route is managed here."
+  value = [for key, association in module.association : {
+    center_key          = key
+    customer_gateway_id = association.customer_gateway_id
+    prefix_list_id      = association.center_prefix_list_id
+    vpc_attachment_id   = association.vpc_attachment_id
+    vpn_attachment_id   = association.vpn_attachment_id
+    vpn_connection_id   = association.vpn_connection_id
+  }]
+}

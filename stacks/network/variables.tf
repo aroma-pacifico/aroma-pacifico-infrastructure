@@ -31,6 +31,48 @@ variable "environment" {
 # Network inputs (B04b), alphabetical among themselves. They follow the
 # governance variables shared by every stack.
 
+variable "center_association" {
+  type = object({
+    collection_center_key  = string
+    workload_account_id    = string
+    workload_plan_role_arn = string
+    hub = object({
+      account_id               = string
+      region                   = string
+      transit_gateway_id       = string
+      customer_certificate_arn = string
+    })
+    network_plan_role_arn = string
+  })
+  description = "Association of this environment with exactly one collection center (B05, box D05): the center key (cauca, huila or tolima, taken from collection_centers), the workload account that owns this VPC, the externally owned hub (network account, Region, Transit Gateway and ACM certificate references) and one plan role per account. Null creates no association. Permanent links exist only in pdn (ASM-121)."
+  default     = null
+
+  validation {
+    condition     = var.center_association == null ? true : var.environment == "pdn"
+    error_message = "Permanent center associations target pdn only; dev is isolated and temporary qa acceptance wiring is outside this contract."
+  }
+
+  validation {
+    condition     = var.center_association == null ? true : contains(["cauca", "huila", "tolima"], var.center_association.collection_center_key) && contains(keys(var.collection_centers), var.center_association.collection_center_key)
+    error_message = "Select exactly one approved center: cauca, huila or tolima."
+  }
+
+  validation {
+    condition     = var.center_association == null ? true : can(regex("^[0-9]{12}$", var.center_association.workload_account_id)) && can(regex("^[0-9]{12}$", var.center_association.hub.account_id)) && can(regex("^tgw-[0-9a-f]{8,17}$", var.center_association.hub.transit_gateway_id))
+    error_message = "The workload and hub owners need 12-digit accounts and a Transit Gateway reference."
+  }
+
+  validation {
+    condition     = var.center_association == null ? true : var.center_association.hub.region == var.aws_region && var.aws_region == "us-east-1"
+    error_message = "The workload and hub providers must use the approved primary Region, us-east-1 (ADR-001)."
+  }
+
+  validation {
+    condition     = var.center_association == null ? true : can(regex("^arn:aws:iam::${var.center_association.workload_account_id}:role/[A-Za-z0-9+=,.@_/-]+$", var.center_association.workload_plan_role_arn)) && can(regex("^arn:aws:iam::${var.center_association.hub.account_id}:role/[A-Za-z0-9+=,.@_/-]+$", var.center_association.network_plan_role_arn))
+    error_message = "An explicit plan role in each owner account is required."
+  }
+}
+
 variable "collection_center_summary_cidr_block" {
   type        = string
   description = "Single CIDR block that summarizes every present and future collection center, routed through the transit gateway (10.40.0.0/13 in the addressing plan)."

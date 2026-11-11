@@ -100,6 +100,10 @@ Promotion across environments is a separate pipeline, `CD promotion` (`.github/w
 
 CI and local runs use Terraform 1.15.8, the patch release recorded in `.terraform-version` (ADR-003 asks B01 to record one exact patch at or above the `>= 1.14.0` floor). Provider locks include hashes for Linux, macOS and Windows so that CI on Linux and local runs on other systems resolve the same provider build.
 
+## Collection center association (B05, box D05)
+
+`stacks/network` can also compose one collection center association (`cauca`, `huila` or `tolima`) for the pdn environment through the `collection-center-association` module, consumed by git tag. See [docs/b05-final-delivery.md](docs/b05-final-delivery.md) and [stacks/network/README.md](stacks/network/README.md).
+
 ## Diagram boxes
 
 The structure references boxes D01 to D13 of the complete architecture diagram. See [docs/diagram-boxes.md](docs/diagram-boxes.md) for the box to task to path map.

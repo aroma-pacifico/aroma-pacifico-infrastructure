@@ -29,6 +29,8 @@ override.tf.json
 tfplan
 
 # Editors and OS
+.local/
+.terraform-data/
 .idea/
 .vscode/
 .DS_Store
