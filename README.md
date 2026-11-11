@@ -19,10 +19,16 @@ See [D02 technical evidence](docs/d02-technical-evidence.md) for actual checks a
 stacks/
 |-- network/   (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
 |-- security/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
-`-- workload/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
+|-- workload/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
+`-- state-backend/ (README, backends/*.example, inactive root-template/*.example)
 scripts/prepare-backend.py
 scripts/verify-backends.py
+scripts/backend-routing.py
+scripts/launcher-contract.json
+scripts/test-backend-routing.py
+scripts/verify-bootstrap.py
 docs/remote-state.md
+docs/b02-implementation-evidence.md
 docs/d02-technical-evidence.md
 docs/decision-log.md
 docs/troubleshooting-log.md
@@ -45,3 +51,10 @@ is needed by these declarations: S3 backends are built into Terraform.
 
 See [B02 dependency refresh](docs/d02-dependency-refresh.md) for the
 2026-11-10 audit, current permissions, executed checks and remaining blockers.
+
+The subsequent [B02 implementation evidence](docs/b02-implementation-evidence.md)
+supersedes that snapshot for resource-module, bootstrap and launcher-routing
+coverage. There are now twelve backend templates, including the fourth
+`stacks/state-backend` domain with an inactive release template. Read the
+[backend guide](docs/remote-state.md) for the fail-closed environment checkout
+convention. No remote backend has been deployed or tested against AWS.

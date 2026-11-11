@@ -1,85 +1,196 @@
-# D02 remote state
+# B02 remote Terraform state
 
-Owner: JR2. Scope: partial progress on aroma-pacifico/aroma-pacifico-roadmap#22 (B02, 6 h estimate). This is code-level preparation, not a working cloud backend. The [decision register](decision-log.md) tracks unresolved prerequisites.
+Refs aroma-pacifico/aroma-pacifico-roadmap#22. Owner: JR2. IMPLEMENTED and
+VERIFIED OFFLINE are code/evidence labels, not deployment claims. All four
+issue criteria remain PARTIAL except secret hygiene, which passes within the
+reviewed tracked-code scope. No real AWS plan, bootstrap or migration was run.
 
-## Architecture and configuration
+## Architecture and resource boundary
 
-ADR-003 in the architecture repository selects domain roots `stacks/network`, `stacks/security` and `stacks/workload`. Each contains `backend.tf` with an empty `terraform { backend "s3" {} }` declaration and `versions.tf` with `required_version = ">= 1.14.0"` (PC-IAC-006). The backend is built into Terraform; AWS provider constraints and committed provider lockfiles belong to B01 when it adds provider consumers. These scaffolds manage no resources or input secrets.
+Accepted ADR-003 selects one S3 bucket and customer-managed KMS key per account
+and environment, with native S3 locking. ASM-213 assigns their implementation to
+B02. The reusable child is `modules/state-backend` in the Terraform modules
+repository. The private [bootstrap composition](../stacks/state-backend/README.md)
+is an inactive release template. Network, security and workload remain separate
+backend-only scaffolds until B01 supplies their resource compositions.
 
-| Field | Reason |
+| Backend field | Required contract |
 |---|---|
-| `bucket` | One verified bucket in each environment's account; placeholders are intentionally unusable. |
-| `key` | ADR-003's exact domain path: `network/terraform.tfstate`, `security/terraform.tfstate` or `workload/terraform.tfstate`. |
-| `region` | `us-east-1`, established by ADR-001 and the landing-zone design. |
-| `encrypt = true` | PC-IAC-008 requires server-side state encryption. |
-| `kms_key_id` | Environment-owned customer-managed state key, as ADR-003 and ASM-097 require. |
-| `use_lockfile = true` | Native S3 concurrency locking; compatible with the architecture's Terraform floor. |
-| `allowed_account_ids` | Fail initialization when the backend caller uses an unintended account. |
+| bucket | Distinct owner-verified environment bucket; root-built naming |
+| key | `<domain>/terraform.tfstate`, domain network/security/workload/state-backend |
+| region | us-east-1, ADR-001 primary Region |
+| encrypt | true |
+| kms_key_id | Same-account, same-Region customer-managed state key ARN |
+| use_lockfile | true; no DynamoDB table |
+| allowed_account_ids | Exactly the selected verified environment account |
 
-`dev`, `qa` (test) and `pdn` (production) each have a separate template per stack. A state object's full identity is **bucket plus key**. Keys intentionally remain the accepted domain paths; the distinct bucket, account, IAM boundary and local backend cache identify the environment. Do not substitute a single shared bucket or use workspaces to represent these environments. Use only the default workspace. The preflight rejects duplicate objects and repeated accounts/buckets/KMS keys across environments, including accidental reuse of production configuration.
+There are twelve `.example` templates: three environments by four domains.
+Placeholders cannot initialize a backend. Full state identity is bucket plus
+key; domain keys remain identical across distinct environment buckets. Only
+the default Terraform workspace is supported. Environments must never share
+accounts, buckets, KMS keys or an effective initialization directory.
 
-## Offline validation and future initialization
+## S3 and KMS security
 
-From the repository root, run `python scripts/prepare-backend.py --templates`,
-`python scripts/verify-backends.py`, `terraform fmt -check -recursive`, and, for
-each domain root, `terraform -chdir=stacks/network init -backend=false -input=false`
-followed by `terraform -chdir=stacks/network validate` (replace `network` for the
-other two). The tracked verifier tests synthetic configuration and rejects
-unsafe or incomplete inputs; it only inspects printed initialization commands.
-Offline validation never proves bucket reachability, permissions or security.
+The child defines eight AWS resources: bucket, ownership controls, public-access
+block, versioning, encryption, bucket policy, KMS key and alias. It enforces all
+four public-access controls, BucketOwnerEnforced, SSE-KMS, versioning,
+force_destroy=false and bucket/key prevent_destroy. There is no ACL, object
+expiry, replication or lifecycle rule deleting state versions. KMS rotates every
+365 days and retains the ASM-097 30-day deletion waiting period. Lockout safety
+is retained. These resource properties are VERIFIED OFFLINE only.
 
-After the blockers are resolved, copy each `.example` file to the same path without `.example`. Replace only the REQUIRED identifiers with owner-verified values, consistent across domains. Real backend files are ignored by Git and must contain no credentials. The supplied literal-file format deliberately excludes custom endpoints, insecure TLS options, profiles and arbitrary HCL expressions.
+Bucket policy denies insecure transport, unknown principals, wrong explicitly
+requested encryption/key, and state deletion. Omitting encryption headers uses
+the bucket CMK default; explicitly requesting aws:kms without its key is denied.
+Exact per-domain plan roles read state and read/write/delete the adjacent
+`.tflock`. Only separately configured writers may write state. Writers are an
+optional typed boundary, not deployment authorization. Empty writer sets deny
+state writes. Cross-domain state and lock access is explicitly restricted.
 
-`python scripts/prepare-backend.py --environment qa --stack network` validates all nine concrete files, then prints PowerShell commands for review; it executes none. `--config-root` can select an external directory with the same domain/backends layout. The printed commands set `TF_WORKSPACE=default` and an absolute, environment-and-domain-specific `TF_DATA_DIR` under ignored `.terraform-data/`, then request `init -input=false -reconfigure -backend-config=<absolute-file>`. Use a fresh working directory/cache, verify the tuple and identity, and never add backend overrides or migration flags. Existing state requires a separately approved migration procedure; reconfigure is not migration. Do not run a plan of these empty scaffolds against an existing workload state: it could propose deletes.
+KMS policy names approved same-account IAM roles, with separate administrators,
+configuration readers and data roles. It creates no roles and grants no root
+delegation, wildcard administrator, default decrypt-to-admin, disable-key or
+key-deletion action. Data operations require the exact account, S3 service and
+state/lock object encryption context. Bucket Keys are disabled because their
+bucket-scoped encryption context would invalidate that domain boundary. Key
+policy Resource="*" means this specific key; restrictive S3 Deny statements use
+wildcards, while Allow statements name roles/resources.
 
-Future `init` loads backend settings and modules/providers and contacts S3; it does not create the bucket. A normal future `plan` reads state and AWS resources, acquires/releases a `.tflock`, and proposes changes. Future `apply` executes the approved plan and writes new state while holding the lock. Apply is prohibited throughout the academic phase. Never use `-lock=false` or force-unlock to bypass a lock error. Even a remote plan writes lock objects, so it is not strictly non-mutating; PD-019 must settle the permitted evidence approach first.
+B06 must supply real principals and equally narrow identity policies. ListBucket
+prefix grants alone do not override broader identity grants. The key creator
+must be covered by the approved administration policy; alias creation also needs
+IAM authorization. Real policy evaluation, lock permissions, AWS backend list
+requests and key-lockout checks REQUIRE AWS verification. Audit/access logging
+integration is BLOCKED BY DEPENDENCY: no approved destination was supplied.
+Trivy's missing-access-logging finding is retained, not suppressed.
 
-## Bootstrap contract (not provisioned)
+## Bootstrap without a circular backend
 
-Local launcher prerequisite (2026-11-10): the installed managed Terraform launcher
-overrides incoming TF_DATA_DIR with an operational cache derived only from the
-root path. The preflight verifies printed environment/domain strings, not this
-effective routing. Before any future live init, the tooling owner must verify
-separate effective environment caches and the selected backend tuple under the
-approved launcher. Do not bypass it or alter operational backend metadata to
-manufacture isolation evidence. Current checks use its validation context only.
+1. Review and release the resource module under a real SemVer tag. B01/B03/B06
+   supply root/provider, environment/account and role contracts respectively.
+2. Review the inactive root template. Its module URL contains an unmistakably
+   non-release placeholder; do not activate it until an actual tag is available.
+3. First bootstrap cannot use the bucket it will create. The initial composition
+   excludes backend.tf.example. This task uses only a disposable mocked plan
+   fixture, never shared local state or cloud creation.
+4. Any future bootstrap execution, handling of its initial state and migration
+   into `state-backend/terraform.tfstate` REQUIRE APPROVAL and a permitted
+   governance phase. The current plan-only constitution prohibits execution.
+5. After creation and independent security verification, consumer roots may
+   initialize their approved buckets under a separately authorized handoff.
 
-The bucket and KMS key must exist **before** backend-enabled initialization.
-No existing backend resources or identities have been verified. The merged
-100-hour plan (`docs/iac-plan-100h.md`, ASM-213, architecture PR #38) explicitly
-assigns the state bucket and state KMS key to B02 in `stacks/state-backend`.
-ADR-003 designs migration of that stack's state into its own bucket. This
-supersedes the earlier local register's assumption that independent external
-bootstrap-state ownership was mandatory; no such alternative is approved.
-The resource module, bootstrap root and released module interface are still
-missing. B01 has not delivered its root/provider/environment baseline. This
-branch supplies only the three consumer backend scaffolds, not the complete
-B02 resource graph. PD-019 still governs plan evidence. No bootstrap, local
-shared state, migration or cloud initialization is performed; a future execution
-procedure requires separate authorization within the plan-only constitution.
+The preflight deliberately rejects state-backend initialization, including a
+future self-hosted case. It cannot establish that bootstrap and migration have
+already happened. A separately reviewed procedure must authorize that transition.
+Never initialize an empty consumer scaffold against an existing workload state:
+an empty resource graph could propose deleting resources owned by that state.
 
-The independently approved bootstrap must specify one bucket per environment in its workload account, versioning enabled, all four S3 Block Public Access settings, BucketOwnerEnforced ownership, default SSE-KMS with that environment's state CMK, and a bucket-policy deny for non-TLS requests (`aws:SecureTransport=false`). Deny uploads that request another encryption algorithm or another key, and deny unexpected principals. AWS SDK HTTPS defaults are not a substitute for this policy. Use `force_destroy=false` and `lifecycle { prevent_destroy = true }`; protect the KMS key from destruction, enable annual rotation and retain the ASM-097 30-day key-deletion waiting period. Do not expire historical state versions before an owner approves retention. Enable the landing-zone audit integration. None of these bucket-side protections is created by `encrypt` or verified by `validate`.
+## Launcher routing and environment isolation
 
-## Authentication and least privilege
+The approved AutoDev launcher replaces incoming TF_DATA_DIR. Its dispatcher
+hashes the normalized absolute root path, not environment identity; the first
+24 SHA-256 characters select `data/<id>` or `validation-data/<id>`. Setting a
+different environment variable on one root therefore does not isolate caches.
+It also checks/creates operational registrations before choosing validation.
+No shared launcher file, operational registration or existing cache was changed.
 
-CI should use the existing **design** for GitHub OIDC into an environment plan role; no OIDC provider, role or Terraform workflow exists in this checkout. Restrict trust to the infrastructure repository and approved subjects, with `aud=sts.amazonaws.com`; production deployment trust must use the protected `pdn` environment subject. Never grant cloud credentials to untrusted PR code. Use IAM Identity Center/SSO temporary credentials locally through the AWS credential chain, without putting profiles or access keys in backend files. Backend identity and AWS provider identity are configured separately; provider `assume_role` does not authenticate the backend. B01/B03/B11 own that wiring.
+The repository-side mitigation requires dedicated clean Git checkouts at
+`.../environments/dev`, `.../environments/qa`, `.../environments/pdn`. Each must
+match the reviewed control checkout's commit and origin. Domain root paths now
+contribute both environment and domain to the effective destination. Do not
+represent environments with workspaces or switch backend tuples on one root.
 
-| Permission | Scope for a plan role in one environment/domain |
-|---|---|
-| `s3:ListBucket` | Only that environment's bucket ARN, with a prefix condition allowing only the selected domain state/lock paths; verify actual list requests. |
-| `s3:GetObject` | Exact `arn:aws:s3:::<verified-bucket>/<domain>/terraform.tfstate`. |
-| `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` | Exact adjacent `terraform.tfstate.tflock` object; no wildcard state deletion. |
-| `kms:Decrypt` | Exact environment state-key ARN, for state and lock reads. |
-| `kms:GenerateDataKey`, `kms:Encrypt` | Exact key for encrypted lock writes; scope via S3 service and encryption context where verified. |
+`prepare-backend.py` verifies all twelve concrete configurations, the separately
+supplied expected account, a checkout-local backend file, tracked launcher/shim/
+settings fingerprints, resolved executable, managed workspace, existing matching
+registration, default workspace, cached backend tuple and inherited CLI arguments.
+It rejects mismatches and creates no registrations. Any incoming TF_DATA_DIR must
+already match the computed effective route. It prints review-only commands after
+those checks; it does not initialize a backend or authenticate an account.
 
-Keep matching KMS key-policy grants; IAM alone is insufficient. Backend KMS permission requirements must be verified against the selected Terraform version. If S3 Bucket Keys are enabled, the KMS encryption context can be bucket-scoped, so enforce domain isolation through S3 IAM too. A future apply role additionally needs `s3:PutObject` on the exact state object; plan roles must not have it. Normal operations need no state `DeleteObject`, bucket administration or KMS administration. Put recovery/version access in a separate audited human role. No QA principal may access the PDN bucket/key. These are recommendations, not deployed policies, and cannot compensate for absent bucket policies or SCPs.
+After all external prerequisites and explicit live-init approval, the review-only
+interface is:
 
-## Secrets, recovery and alternatives
+```text
+python scripts/prepare-backend.py --environment qa --stack network --checkout-root <dedicated-environments/qa-checkout> --expected-account-id <verified-account>
+```
 
-`sensitive = true` masks output; it does **not** remove plaintext values from state. Use IAM instead of passwords; where supported use ephemeral reads and write-only provider arguments. Ordinary secret-manager data sources can persist secret values. State, backend caches and plans still require restricted access. Git ignores state/locks, caches, concrete backend files, tfvars and common saved plan names. Never save a sensitive plan under an arbitrary unignored filename; use ignored `.local/` for local artifacts and review staging before every commit.
+Concrete files are ignored by Git. `--config-root` must stay inside the selected
+checkout's stacks directory. Do not add credentials, profiles, custom endpoints,
+extra backend overrides, migration flags or -lock=false. Missing registrations
+require the tooling maintainer's approved provisioning process. Changing the
+launcher requires renewed fingerprint review; do not just replace the hashes.
 
-To recover later, stop concurrent writers, have an authorized operator inspect the state lineage/serial and S3 version history, select the correct environment and domain, preserve the current version, and restore only under explicit approval. Versioning cannot recover data if the bucket or KMS key is lost. `prevent_destroy` only protects Terraform operations while the resource declaration remains; IAM, SCPs, key protection and audit remain necessary. Reverting this code does not migrate or restore state. No recovery, migration or unlock was performed here.
+This is a fail-closed review aid, not a security sandbox around direct CLI use.
+A user can bypass it, and checking then executing is not atomic. Full operational
+isolation remains PARTIAL pending maintainer-owned registrations and real backend
+verification. No launcher diagnostic command was used to manufacture evidence.
 
-Native locking avoids a DynamoDB table and its policies/costs. A shared bucket weakens the accepted account boundary; workspaces can select the wrong state; local shared state violates PC-IAC-008; HCP Terraform violates the S3 standard. Future resources incur S3 storage/version/request, customer-managed KMS key/API and audit costs. No cost figure is asserted and no resources were created.
+## Reproducible offline verification
 
-Primary references: [HashiCorp S3 backend](https://developer.hashicorp.com/terraform/language/backend/s3), [Terraform init](https://developer.hashicorp.com/terraform/cli/commands/init), [AWS SSE-KMS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html).
+Use Python >=3.10 and Terraform >=1.14 through the approved launcher. Before
+running it in any new root, confirm its registration behavior. For this refresh,
+a checksum-identical isolated copy of the approved shim/dispatcher/settings was
+used with temporary launcher caches. This preserves launcher behavior without
+touching shared operational registrations. No native Terraform bypass was used.
+The existing AWS 6.0.0 package was a read-only installation mirror; recorded lock
+checksums were retained. Local mirror installation is not a fresh registry
+signature-verification claim.
+
+```text
+python scripts/prepare-backend.py --templates
+python scripts/verify-backends.py
+python scripts/test-backend-routing.py
+python scripts/verify-bootstrap.py --module-root <reviewed-state-backend-child>
+terraform fmt -check -recursive
+terraform -chdir=stacks/network init -backend=false -input=false
+terraform -chdir=stacks/network validate
+```
+
+Repeat the last two checks for security/workload. The state-backend directory is
+intentionally inactive; verify-bootstrap.py copies its reviewed release template
+to an ignored temporary development root, omits the backend and substitutes only
+the module source. It initializes backend=false, validates and runs two native
+mock-provider plan scenarios. It never alters the production source placeholder.
+Routing tests run the unchanged dispatcher with fake native execution and
+temporary registrations, proving destinations without touching real caches.
+See [implementation evidence](b02-implementation-evidence.md) for actual results,
+tool versions, negative scenarios, scanner findings and unavailable checks.
+
+## External contracts and operational handoff
+
+| Dependency | Required deliverable | Status |
+|---|---|---|
+| B01 #21 | Real root/provider baseline, exact CI Terraform version, module consumption | BLOCKED BY DEPENDENCY |
+| B03 #23 | Verified per-environment accounts, names, configuration | BLOCKED BY DEPENDENCY |
+| B06 #26 | Admin/configuration/plan identities, IAM policies, audit destination | BLOCKED BY DEPENDENCY |
+| B13 #33 / module maintainers | Reviewed real SemVer release, protected CI/evidence | BLOCKED BY DEPENDENCY |
+| Architecture PD-019 | Permitted real plan/lock evidence in plan-only phase | REQUIRES APPROVAL |
+| Tooling maintainer | Dedicated approved registrations, reviewed launcher lifecycle | BLOCKED BY DEPENDENCY |
+| AWS access owner | Authorized QA identity and existing verified backend | REQUIRES AWS |
+
+Backend credentials and provider assume_role are separate: provider wiring never
+authenticates the built-in backend. Use approved temporary identities only. A
+remote plan normally writes/deletes lock objects, so agree PD-019 before calling
+it read-only. Credentials alone do not authorize bootstrap, migration or deploy.
+
+## State exposure, rollback and recovery
+
+State can contain sensitive resource metadata and values even when outputs are
+sensitive. Encrypting at rest does not restrict an authorized reader. Never
+commit raw state, backend caches, saved plans, actual identities or credentials.
+Use ignored .local for evidence, review staging and maintain narrow S3/KMS IAM.
+Versioning protects history; it cannot recover a deleted key or bucket.
+
+Current rollback is a code revert through review, with no cloud action. If ever
+deployed, removing a resource block can bypass prevent_destroy; independent IAM,
+SCPs, audit and a reviewed recovery procedure remain essential. Do not roll back
+encryption by scheduling key deletion or disabling versioning. Recovery must
+verify environment, lineage/serial and object version under explicit approval.
+No recovery, state mutation or cloud deployment was performed.
+
+References: [ADR-003](https://github.com/aroma-pacifico/aroma-pacifico-architecture/blob/main/docs/adr/adr-003-iac-tool-remote-state-and-pattern-module.md),
+[B02](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/22),
+[S3 backend](https://developer.hashicorp.com/terraform/language/backend/s3),
+[AWS SSE-KMS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html).
