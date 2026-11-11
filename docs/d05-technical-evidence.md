@@ -1,5 +1,9 @@
 # D05 / B05 technical evidence
 
+Historical snapshot. See the [2026-11-10 refresh](d05-dependency-refresh.md)
+for current permissions, dependencies and verification; older publication blockers
+and test counts below describe the earlier session.
+
 Date: 2026-11-07. Owner: JR2. Status: partial; Draft PR required.
 Refs [aroma-pacifico/aroma-pacifico-roadmap#25](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/25).
 No cloud deployment, standalone account plan, state migration or state mutation was performed.

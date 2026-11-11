@@ -39,3 +39,8 @@ docs/troubleshooting-log.md
 - [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31)
 - [B12](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/32)
 - [B13](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/33)
+
+## Latest verification refresh
+
+See [B05 dependency refresh](docs/d05-dependency-refresh.md) for the
+2026-11-10 audit, current permissions, executed checks and remaining blockers.
