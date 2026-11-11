@@ -19,6 +19,7 @@ aroma-pacifico-infrastructure/
 |-- .terraform-version      exact Terraform patch used by local runs and CI
 |-- docs/
 |   |-- case/               case statement, the sole source of requirements
+|   |-- b13-final-validation.md  end-to-end plan, secret validation and D01 to D13 evidence (B13)
 |   |-- cd-pipeline.md      CD promotion runbook: approval, evidence, notice, rollback (B12)
 |   `-- diagram-boxes.md    map of diagram boxes D01 to D13 to this repository
 |-- environments/
@@ -94,6 +95,8 @@ The continuous integration pipeline validates and exercises every root stack on 
 `Floci plan` (`.github/workflows/floci-plan.yml`) runs a speculative `terraform plan` of each root stack against the Floci AWS emulator, pinned by image digest. It creates a throwaway state bucket in the emulator, initializes the S3 backend with path style, plans with the qa example variables, writes the plan summary to the job summary and keeps the plan text as a three-day artifact. The emulator uses the fixed test keys of PC-IAC-028, never real credentials.
 
 `Infracost cost impact` (`.github/workflows/infracost.yml`) estimates the monthly cost before, after and as a delta for each root stack with Infracost CLI v2 and the non-sensitive qa example variables. It authenticates only with the organization token secret `INFRACOST_CLI_TOKEN` and the repository variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED`, and it reports "estimate unavailable" when they are missing instead of claiming a zero cost.
+
+The job `end-to-end` of `Floci plan` runs `scripts/plan-all.sh`, which plans the four stacks in dependency order and writes one summary and one artifact, then `scripts/validate-no-secrets.sh`, which checks the full history and the plan JSON with a pinned gitleaks. See [docs/b13-final-validation.md](docs/b13-final-validation.md).
 
 Promotion across environments is a separate pipeline, `CD promotion` (`.github/workflows/cd-promotion.yml`).
 

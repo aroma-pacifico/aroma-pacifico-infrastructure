@@ -20,4 +20,4 @@ definition of each box is in section 14 of the architecture document of
 | D10 | B10 | [roadmap#30](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/30) | Module in the modules repository, wired in `stacks/workload/` |
 | D11 | B11 | [roadmap#31](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31) | `.github/workflows/` (CI) |
 | D12 | B12 | [roadmap#32](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/32) | `.github/workflows/` (CD) |
-| D13 | B13 | [roadmap#33](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/33) | Evidence mapped across all stacks |
+| D13 | B13 | [roadmap#33](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/33) | Evidence mapped across all stacks: [b13-final-validation.md](b13-final-validation.md) |
