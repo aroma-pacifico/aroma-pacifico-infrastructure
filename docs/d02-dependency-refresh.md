@@ -155,6 +155,12 @@ are recorded in the PR and the new roadmap progress comment.
 
 ## Published review package
 
+Additional local prerequisite: the installed managed launcher replaces TF_DATA_DIR
+with a cache derived from the root path. The rendered QA/PDN cache paths therefore
+do not prove separate effective operational caches. The tooling owner must
+demonstrate environment isolation before a future live init. No launcher change,
+bypass or operational backend/state mutation was performed in this review.
+
 The assigned branch `feat/22-remote-state-backend` was pushed successfully without force.
 [B02 Draft PR](https://github.com/aroma-pacifico/aroma-pacifico-infrastructure/pull/3) is Open, targets main, and remains Draft.
 Its three existing GitHub convention checks passed; they do not run Terraform

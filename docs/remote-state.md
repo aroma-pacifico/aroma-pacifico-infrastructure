@@ -36,6 +36,14 @@ Future `init` loads backend settings and modules/providers and contacts S3; it d
 
 ## Bootstrap contract (not provisioned)
 
+Local launcher prerequisite (2026-11-10): the installed managed Terraform launcher
+overrides incoming TF_DATA_DIR with an operational cache derived only from the
+root path. The preflight verifies printed environment/domain strings, not this
+effective routing. Before any future live init, the tooling owner must verify
+separate effective environment caches and the selected backend tuple under the
+approved launcher. Do not bypass it or alter operational backend metadata to
+manufacture isolation evidence. Current checks use its validation context only.
+
 The bucket and KMS key must exist **before** backend-enabled initialization.
 No existing backend resources or identities have been verified. The merged
 100-hour plan (`docs/iac-plan-100h.md`, ASM-213, architecture PR #38) explicitly
