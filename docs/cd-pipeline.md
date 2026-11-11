@@ -301,7 +301,7 @@ B11 should re-check its pin.
 | Add secret `INFRACOST_CLI_TOKEN`; confirm variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED` | Repository administrator | Human lead |
 | Add variable `HARVEST_WEEK_DATES` (empty until then: warning, no block) | The Federation calendar (ASM-008, PD-005) | Human lead |
 | Dedupe against B11 (section 8) | A follow-up change; the B11 set, including #12, is merged | B11 and B12 owners |
-| Meaningful plans and costs: today the stacks hold only provider, backend and variables, so every plan reads "no changes" and every estimate is zero | Stack wiring B04b, B06b, B07b, B09b | Task owners |
+| Meaningful costs: the stacks are wired (B04b, B06b, B07b and B09b are merged), so the plans list resources, but an estimate needs the Infracost secret and variables above | Repository administrator | Human lead |
 | First real dispatch of both runs, including the approval checks, the manifest digest, the Infracost output shape and Floci readiness | A human dispatch after merge; the workflows have never run on GitHub | Human lead |
 | Explicit maximum age of run 1 for the approval | Not coded; today only the 7-day artifact expiry limits it; to be decided | Human lead |
 | Decision-log entries for the choices in this document | ASM-320 to ASM-324 and the closing of PD-020 in `aroma-pacifico-architecture` | Human lead |

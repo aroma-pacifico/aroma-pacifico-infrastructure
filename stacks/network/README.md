@@ -39,16 +39,13 @@ Only the outputs that later stacks need are exposed (PC-IAC-019 section 3.2).
 
 | Output | Consumed by | Use |
 |---|---|---|
-| `vpc_id`, `vpc_cidr_block` | B07b, B09b | `vpc_id` of the firewall rules module; VPC block for security group rules. |
-| `subnet_ids` | B09b | Subnets by tier and slot, for example `telemetry_ingress` and `application` for VPC-attached functions. |
-| `subnet_cidr_blocks` | B07b | `application` blocks are the only sources of the data store security group (`application_cidr_blocks`). |
-| `route_table_ids`, `network_acl_ids` | later routes and associations | One per tier. |
-| `interface_endpoint_ids` | B07b | `execute-api` and `s3` endpoints that receive the endpoint policies (CL-APP-02, CL-DRN-02). |
-| `endpoint_security_group_ids`, `gateway_endpoint_ids` | B06b | Endpoint security groups; gateway endpoint IDs for `aws:SourceVpce` conditions. |
-| `availability_zone_ids` | B09b | Availability Zone ID behind each slot. |
+| `vpc_id` | B07b (`stacks/security`, `firewall_rules.tf`) | `vpc_id` input of the firewall rules module. |
+| `subnet_cidr_blocks` | B07b (`stacks/security`) | The `application` entry feeds `application_subnet_cidr_blocks`: the only sources of the data store security group (CL-DAT-02). |
+| `interface_endpoint_ids` | B07b (`stacks/security`) | The keys `exapi` and `s3` are required: they receive the endpoint policies of `execute-api` and S3 (CL-APP-02, CL-DRN-02). |
 | `transit_attachment_subnet_ids` | network account | Subnets for the transit gateway attachment, created outside this stack. |
+| `vpc_cidr_block`, `subnet_ids`, `route_table_ids`, `network_acl_ids`, `endpoint_security_group_ids`, `gateway_endpoint_ids`, `availability_zone_ids` | no stack yet | Kept as the minimal set for later routes, associations and endpoint conditions (`gateway_endpoint_ids` for `aws:SourceVpce`). No stack reads them today. |
 
-A consuming stack reads these through `terraform_remote_state` only with the documented exception of PC-IAC-019 section 2.2 in its own README.
+Neither the security module call (B06b) nor the telemetry ingestion call (B09b) takes any network output. `stacks/security` receives the three B07b values as the input variables `vpc_id`, `application_subnet_cidr_blocks` and `interface_endpoint_ids`, set in the per-environment variable files, not through `terraform_remote_state` (PC-IAC-019 section 2.2).
 
 ## Plan it against Floci
 

@@ -58,7 +58,7 @@ output "key_user_arns" {
 }
 
 output "queue_arns" {
-  description = "Trigger queue ARN of each inference function, for the send permission of the telemetry rule role and the drone event rules."
+  description = "Trigger queue ARN of each inference function, for the drone event rules."
   value       = module.inference_functions.queue_arns
 }
 
