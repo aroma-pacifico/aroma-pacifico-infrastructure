@@ -1,0 +1,7 @@
+# Real variable and backend files stay local or are rendered in CI. Only the
+# *.example files are committed (B03). Scoped here so the root .gitignore is
+# not touched.
+*.tfvars
+*.tfvars.json
+*.tfbackend
+!*.example
