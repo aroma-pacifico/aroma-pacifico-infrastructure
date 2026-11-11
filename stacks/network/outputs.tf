@@ -1,5 +1,6 @@
-# Minimal outputs for the stacks that build on the network (PC-IAC-019 section 3.2):
-# firewall rules (B07b), telemetry ingestion (B09b) and the security stack (B06b).
+# Minimal outputs for the stacks that build on the network (PC-IAC-019 section 3.2).
+# Today only the firewall rules wired in stacks/security (B07b) read them, as input
+# variables: vpc_id, subnet_cidr_blocks["application"] and interface_endpoint_ids.
 
 output "availability_zone_ids" {
   description = "Availability Zone ID behind each slot (az1 to az3)."
@@ -17,7 +18,7 @@ output "gateway_endpoint_ids" {
 }
 
 output "interface_endpoint_ids" {
-  description = "Interface endpoint IDs keyed by the short name given in interface_endpoints, for endpoint policies."
+  description = "Interface endpoint IDs keyed by the short name given in interface_endpoints. The keys exapi and s3 receive the endpoint policies of the firewall rules in stacks/security."
   value       = module.network.interface_endpoint_ids
 }
 
@@ -32,7 +33,7 @@ output "route_table_ids" {
 }
 
 output "subnet_cidr_blocks" {
-  description = "Subnet CIDR blocks keyed by tier and Availability Zone slot, for security group rules."
+  description = "Subnet CIDR blocks keyed by tier and Availability Zone slot. The application blocks are the sources of the data store security group in stacks/security."
   value       = module.network.subnet_cidr_blocks
 }
 
@@ -52,7 +53,7 @@ output "vpc_cidr_block" {
 }
 
 output "vpc_id" {
-  description = "ID of the environment VPC."
+  description = "ID of the environment VPC, the vpc_id of the firewall rules in stacks/security."
   value       = module.network.vpc_id
 }
 
