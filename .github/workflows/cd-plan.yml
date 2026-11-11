@@ -1,0 +1,139 @@
+name: CD plan (reusable)
+
+# Speculative plan of every root stack for one environment, used by the CD
+# promotion workflow (B12, ADR-003). The plan runs against the pinned Floci AWS
+# emulator with throwaway test credentials, so no cloud credential exists in
+# this job (PC-IAC-028). It never runs a state-changing Terraform command; the
+# plan-only guard of cd-promotion.yml enforces that for every workflow.
+#
+# Self-contained on purpose: it does not call or depend on the B11 CI workflows.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Environment code whose example variable file is planned (dev, qa or pdn)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      floci:
+        image: floci/floci@sha256:5ee85db604c4aa74ac76e07ea5cc83086f37bb472bf3dbb97e34019e48efae9c
+        ports:
+          - 4566:4566
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      # Fictitious Organizations ID for the emulator. The network stack requires
+      # the variable; the real value is never stored in the repository.
+      TF_VAR_organization_id: o-a1b2c3d4e5
+      TF_IN_AUTOMATION: "true"
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned Terraform version
+        id: terraform-version
+        run: |
+          version="$(tr -d '[:space:]' < .terraform-version)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: terraform-plugins-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl', 'stacks/*/versions.tf') }}
+          restore-keys: |
+            terraform-plugins-${{ runner.os }}-
+
+      - name: Plan every stack against the emulator
+        shell: bash
+        run: |
+          set -uo pipefail
+          case "$ENVIRONMENT" in dev|qa|pdn) ;; *) echo "::error::Unknown environment '$ENVIRONMENT'"; exit 1 ;; esac
+          mkdir -p "$TF_PLUGIN_CACHE_DIR" plans
+          for _ in $(seq 1 30); do aws s3 ls >/dev/null 2>&1 && break; sleep 1; done
+          bucket="floci-plan-state-$ENVIRONMENT"
+          aws s3 mb "s3://$bucket"
+
+          failed=0
+          {
+            echo "| Stack | Result | Destroys | Replacements |"
+            echo "|---|---|---:|---:|"
+          } > "plans/summary-$ENVIRONMENT.md"
+
+          for dir in stacks/*/; do
+            stack="$(basename "$dir")"
+            ls "$dir"*.tf >/dev/null 2>&1 || continue
+            text="plans/$ENVIRONMENT-$stack.txt"
+            file="$PWD/plans/$ENVIRONMENT-$stack.tfplan"
+            rc=0
+            {
+              terraform -chdir="$dir" init -input=false -no-color \
+                -backend-config="bucket=$bucket" \
+                -backend-config="key=$stack/terraform.tfstate" \
+                -backend-config="region=us-east-1" \
+                -backend-config="use_path_style=true" \
+                -backend-config="use_lockfile=true" \
+                -backend-config="skip_credentials_validation=true" \
+                -backend-config="skip_requesting_account_id=true" \
+                -backend-config="skip_metadata_api_check=true" &&
+              terraform -chdir="$dir" plan -input=false -no-color -detailed-exitcode \
+                -var-file="../../environments/$ENVIRONMENT/$ENVIRONMENT.tfvars.example" \
+                -out="$file"
+            } > "$text" 2>&1 || rc=$?
+            case "$rc" in
+              0) result="no changes" ;;
+              2) result="$(grep -E '^Plan:' "$text" | head -1)" ;;
+              *) result="ERROR (exit $rc)"; failed=1 ;;
+            esac
+            destroys="$(grep -cE 'will be destroyed' "$text" || true)"
+            replaced="$(grep -cE 'must be replaced' "$text" || true)"
+            echo "| \`$stack\` | ${result:-changes} | $destroys | $replaced |" >> "plans/summary-$ENVIRONMENT.md"
+          done
+
+          (cd plans && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS)
+          {
+            echo "### Plan of $ENVIRONMENT (Floci emulator, example variables)"
+            cat "plans/summary-$ENVIRONMENT.md"
+            echo
+            echo "Emulated speculative plan only: nothing was applied and no cloud resource exists."
+            for text in plans/"$ENVIRONMENT"-*.txt; do
+              echo "<details><summary>$(basename "$text")</summary>"
+              echo
+              echo '```text'
+              tail -n 40 "$text"
+              echo '```'
+              echo "</details>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
+
+      - name: Keep the plan artifact for review
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plan-${{ inputs.environment }}
+          path: plans/
+          retention-days: 7
+          if-no-files-found: ignore
