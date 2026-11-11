@@ -1,12 +1,20 @@
 name: CD promotion
 
-# Controlled promotion dev -> qa -> pdn with a mandatory production approval
-# (B12, ADR-003, automation-and-pipelines.md sections 4 and 8, PC-IAC-027/028).
+# Controlled promotion dev -> qa -> pdn with a mandatory two-step production
+# approval (B12, ADR-003, ASM-172, PD-020, PC-IAC-027/028).
 #
 # PLAN-ONLY: this project stops at the speculative plan (AGENTS.md section 4).
 # No job here, or in any workflow, runs a state-changing Terraform command; the
-# guard job fails the run if one appears. The pdn Environment gate sits exactly
-# where an apply job would depend on it and approves the reviewed plan digest.
+# guard job fails the run if one appears.
+#
+# Required reviewers on an Environment are not available for a private repository
+# on GitHub Free, so the approval is a second run of this workflow:
+#   PROMOTION MODE (approve_run_id empty): plan, cost and review. For pdn the run
+#     ends after review-pdn, which publishes the plan digest and the exact inputs
+#     the approver must use.
+#   APPROVAL MODE (approve_run_id set): only the job pdn-approval runs. It checks
+#     the approver and the reviewed run with scripts/cd-verify-approval.sh and
+#     writes the approval record. An apply job, if ever added, would depend on it.
 #
 # Self-contained: depends on no B11 workflow. Runbook: docs/cd-pipeline.md.
 
@@ -38,16 +46,25 @@ on:
         description: Incident reference that overrides the harvest-week window and the release note rule
         type: string
         default: ""
+      approve_run_id:
+        description: "Approval step: run ID of the earlier pdn review run (leave empty to start a promotion)"
+        type: string
+        default: ""
+      approve_digest:
+        description: "Approval step: plan digest shown in the summary of that review run"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
-# A newer merge supersedes a run still waiting for approval. Safe only because
-# this workflow never applies; an apply job, if ever added, needs its own group
-# with cancel-in-progress false (design section 4.4).
+# A newer merge supersedes a promotion run. Safe only because this workflow never
+# applies; an apply job, if ever added, needs its own group with cancel-in-progress
+# false (design section 4.4). An approval run has its own group per reviewed run
+# and is never cancelled, and it never cancels a promotion run.
 concurrency:
-  group: cd-promotion-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ inputs.approve_run_id != '' && format('cd-promotion-approval-{0}', inputs.approve_run_id) || format('cd-promotion-{0}', github.ref) }}
+  cancel-in-progress: ${{ inputs.approve_run_id == '' }}
 
 jobs:
   guard:
@@ -55,6 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      mode: ${{ steps.scope.outputs.mode }}
       promote_to: ${{ steps.scope.outputs.promote_to }}
       cost_environments: ${{ steps.scope.outputs.cost_environments }}
       base_sha: ${{ steps.scope.outputs.base_sha }}
@@ -83,6 +101,7 @@ jobs:
           INPUT_BASE_REF: ${{ inputs.base_ref }}
           INPUT_RELEASE_NOTE: ${{ inputs.release_note_url }}
           INPUT_INCIDENT: ${{ inputs.incident_reference }}
+          INPUT_APPROVE_RUN_ID: ${{ inputs.approve_run_id }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
@@ -92,6 +111,16 @@ jobs:
               echo "::error::Promotion runs only from main (ref is $REF)."; exit 1
             fi
             promote_to="$INPUT_PROMOTE_TO"
+            if [ -n "$INPUT_APPROVE_RUN_ID" ]; then
+              {
+                echo "mode=approval"
+                echo "promote_to=none"
+                echo 'cost_environments=["qa"]'
+                echo "base_sha=$GITHUB_SHA"
+              } >> "$GITHUB_OUTPUT"
+              echo "Approval mode: only the production approval job runs for commit $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
           fi
           if [ "$promote_to" = pdn ] && [ -z "$INPUT_INCIDENT" ]; then
             case "$INPUT_RELEASE_NOTE" in
@@ -107,6 +136,7 @@ jobs:
           envs='["qa"]'
           if [ "$promote_to" = pdn ]; then envs='["qa","pdn"]'; fi
           {
+            echo "mode=promotion"
             echo "promote_to=$promote_to"
             echo "cost_environments=$envs"
             echo "base_sha=$base_sha"
@@ -116,6 +146,7 @@ jobs:
   plan-dev:
     name: Plan dev
     needs: guard
+    if: needs.guard.outputs.mode == 'promotion'
     uses: ./.github/workflows/cd-plan.yml
     with:
       environment: dev
@@ -123,6 +154,7 @@ jobs:
   plan-qa:
     name: Plan qa
     needs: [guard, plan-dev]
+    if: needs.guard.outputs.mode == 'promotion'
     uses: ./.github/workflows/cd-plan.yml
     with:
       environment: qa
@@ -130,7 +162,7 @@ jobs:
   plan-pdn:
     name: Plan pdn
     needs: [guard, plan-qa]
-    if: needs.guard.outputs.promote_to == 'pdn'
+    if: needs.guard.outputs.mode == 'promotion' && needs.guard.outputs.promote_to == 'pdn'
     uses: ./.github/workflows/cd-plan.yml
     with:
       environment: pdn
@@ -138,6 +170,7 @@ jobs:
   cost:
     name: Cost estimate (${{ matrix.environment }})
     needs: guard
+    if: needs.guard.outputs.mode == 'promotion'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -248,7 +281,7 @@ jobs:
   review-pdn:
     name: Production review (plan and cost)
     needs: [guard, plan-pdn, cost]
-    if: needs.guard.outputs.promote_to == 'pdn'
+    if: needs.guard.outputs.mode == 'promotion' && needs.guard.outputs.promote_to == 'pdn'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -285,15 +318,27 @@ jobs:
           WINDOW_STATUS: ${{ steps.window.outputs.window_status }}
           PLAN_DIGEST: ${{ steps.digest.outputs.plan_digest }}
           BASE_SHA: ${{ needs.guard.outputs.base_sha }}
+          REQUESTER: ${{ github.triggering_actor }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           read -r destroys replaced < <(awk -F'|' 'NR>2 {d+=$4; r+=$5} END {print d+0, r+0}' review/plan-pdn/summary-pdn.md)
           {
             echo "## Production approval review"
             echo
-            echo "Approve or reject in the job **Production approval** of this run. Nothing is applied by approving: the project is plan-only."
+            echo "This run only reviews the plan. The approval is a second run by another person, as described below. Nothing is applied: the project is plan-only."
+            echo
+            echo "### How to approve (a person listed in PDN_APPROVERS, other than the requester)"
+            echo
+            echo "Dispatch **CD promotion** from \`main\` while \`main\` is still at the commit below, and fill only these two inputs. Reject by not approving."
+            echo
+            echo "| Input | Value |"
+            echo "|---|---|"
+            echo "| \`approve_run_id\` | \`$RUN_ID\` |"
+            echo "| \`approve_digest\` | \`$PLAN_DIGEST\` |"
             echo
             echo "| Item | Value |"
             echo "|---|---|"
+            echo "| Requester | $REQUESTER |"
             echo "| Commit | \`$GITHUB_SHA\` |"
             echo "| Cost before commit | \`$BASE_SHA\` |"
             echo "| Release note | ${RELEASE_NOTE_URL:-none} |"
@@ -309,25 +354,45 @@ jobs:
             cat review/cost-pdn/cost-pdn.md
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Write the context the approval run reads
+        env:
+          REQUESTER: ${{ github.triggering_actor }}
+          PLAN_DIGEST: ${{ steps.digest.outputs.plan_digest }}
+          PROMOTE_TO: ${{ needs.guard.outputs.promote_to }}
+        run: |
+          python3 -I -c '
+          import json, os
+          e = os.environ
+          ctx = {"requester": e["REQUESTER"], "commit": e["GITHUB_SHA"], "release_note_url": e["RELEASE_NOTE_URL"],
+                 "incident_reference": e["INCIDENT_REFERENCE"], "plan_digest": e["PLAN_DIGEST"], "promote_to": e["PROMOTE_TO"]}
+          json.dump(ctx, open("review-context.json", "w"), indent=2)
+          '
+
+      - name: Keep the review context for the approval run
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-context-pdn
+          path: review-context.json
+          retention-days: 7
+
   pdn-approval:
     name: Production approval
-    needs: [guard, review-pdn]
+    needs: guard
+    if: needs.guard.outputs.mode == 'approval'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Required reviewers on this Environment make the approval mandatory, and
-    # GitHub records who approved and when. Configure it in repository settings.
-    environment:
-      name: pdn
-      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    # No Environment: the gate is the check of the approver and of the reviewed
+    # run in scripts/cd-verify-approval.sh. Nothing is applied or deployed.
     permissions:
       contents: read
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
+      ACTOR: ${{ github.triggering_actor }}
+      PDN_APPROVERS: ${{ vars.PDN_APPROVERS }}
+      APPROVE_RUN_ID: ${{ inputs.approve_run_id }}
+      APPROVE_DIGEST: ${{ inputs.approve_digest }}
       HARVEST_WEEK_DATES: ${{ vars.HARVEST_WEEK_DATES }}
-      INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
-      RELEASE_NOTE_URL: ${{ inputs.release_note_url }}
-      REVIEWED_DIGEST: ${{ needs.review-pdn.outputs.plan_digest }}
     steps:
       - name: Check out the scripts
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -335,49 +400,8 @@ jobs:
           sparse-checkout: scripts
           persist-credentials: false
 
-      - name: Download the reviewed plan
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: plan-pdn
-          path: plan-pdn
-
-      - name: Verify the approval binds the reviewed plan
-        run: |
-          set -euo pipefail
-          (cd plan-pdn && sha256sum --check --strict SHA256SUMS)
-          actual="$(sha256sum plan-pdn/SHA256SUMS | cut -d' ' -f1)"
-          if [ "$actual" != "$REVIEWED_DIGEST" ]; then
-            echo "::error::The plan changed between the review and the approval."; exit 1
-          fi
-
-      - name: Re-check the change window at approval time
-        run: bash scripts/cd-window-check.sh
-
-      - name: Record who approved and when
-        run: |
-          set -uo pipefail
-          approvals="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" 2>/dev/null)" || approvals='[]'
-          printf '%s' "$approvals" | jq -e 'type == "array"' >/dev/null 2>&1 || approvals='[]'
-          jq -n --argjson approvals "$approvals" \
-            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --arg commit "$GITHUB_SHA" --arg digest "$REVIEWED_DIGEST" \
-            --arg note "$RELEASE_NOTE_URL" --arg incident "$INCIDENT_REFERENCE" \
-            --arg recorded "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{run: $run, commit: $commit, plan_digest: $digest, release_note: $note, incident_reference: $incident,
-              recorded_at_utc: $recorded,
-              approvals: [$approvals[] | {approver: .user.login, state: .state, comment: .comment}]}' \
-            > approval-record-pdn.json
-          {
-            echo "## Production approval record (plan-only, nothing applied)"
-            echo
-            echo "The plan and the Infracost cost delta that were approved are in the summary of the job **Production review (plan and cost)** of this run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            echo
-            echo '```json'
-            cat approval-record-pdn.json
-            echo '```'
-            echo
-            echo "The job starts right after the approval, so recorded_at_utc follows it by seconds. The exact approval time is in the run review history and the pdn deployment history."
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify the approver, the reviewed run and the plan digest
+        run: bash scripts/cd-verify-approval.sh
 
       - name: Keep the approval record
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
