@@ -85,9 +85,9 @@ jobs:
           done
           aws s3 mb s3://floci-plan-state
 
-      # A stack whose providers assume a role (box D05) lists fictitious plan
-      # roles in its emulator.tfvars; the emulator enforces IAM, so each role is
-      # created inside the emulator before the plan. No real role is involved.
+      # A stack that assumes roles (association of box D05) lists fictitious plan
+      # roles in its emulator.tfvars. The emulator enforces IAM, so each role is
+      # created inside it before the plan. No real role or account is involved.
       - name: Create the emulator plan roles
         shell: bash
         run: |
@@ -110,24 +110,28 @@ jobs:
             -backend-config="skip_requesting_account_id=true" \
             -backend-config="skip_metadata_api_check=true"
 
-      # A stack may add synthetic fixtures (emulator.tfvars) that complete or
-      # override the qa example variables, for instance the pdn-only D05 link.
       - name: Plan with the qa example variables (terraform plan)
         shell: bash
         run: |
-          var_files=(-var-file=../../environments/qa/qa.tfvars.example)
-          if [ -f "stacks/$STACK/emulator.tfvars" ]; then
-            var_files+=(-var-file=emulator.tfvars)
-          fi
           terraform -chdir="stacks/$STACK" plan -lock=false -input=false -no-color \
-            "${var_files[@]}" | tee "plan-$STACK.txt"
+            -var-file=../../environments/qa/qa.tfvars.example | tee "plan-$STACK.txt"
+
+      # Permanent center links exist only in pdn (ASM-121), so a stack with
+      # emulator fixtures gets a second plan: the pdn example plus those fixtures.
+      - name: Plan the pdn example with the emulator fixtures (terraform plan)
+        shell: bash
+        run: |
+          [ -f "stacks/$STACK/emulator.tfvars" ] || exit 0
+          terraform -chdir="stacks/$STACK" plan -lock=false -input=false -no-color \
+            -var-file=../../environments/pdn/pdn.tfvars.example \
+            -var-file=emulator.tfvars | tee "plan-$STACK-pdn.txt"
 
       - name: Publish the plan summary
         if: always()
         shell: bash
         run: |
           {
-            echo "### Terraform plan of $STACK (Floci emulator, example variables and emulator fixtures)"
+            echo "### Terraform plan of $STACK (Floci emulator, qa example variables)"
             if [ -f "plan-$STACK.txt" ]; then
               result="$(grep -E '^(Plan:|No changes\.)' "plan-$STACK.txt" | head -1 || true)"
               echo "Result: ${result:-no plan summary line found}"
@@ -137,6 +141,14 @@ jobs:
             else
               echo "No plan was produced."
             fi
+            if [ -f "plan-$STACK-pdn.txt" ]; then
+              echo "### Terraform plan of $STACK (Floci emulator, pdn example variables and emulator fixtures)"
+              result="$(grep -E '^(Plan:|No changes\.)' "plan-$STACK-pdn.txt" | head -1 || true)"
+              echo "Result: ${result:-no plan summary line found}"
+              echo '```text'
+              tail -n 25 "plan-$STACK-pdn.txt"
+              echo '```'
+            fi
             echo "Emulated plan only: nothing was applied and no cloud resource exists."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -145,6 +157,8 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plan-${{ matrix.stack }}
-          path: plan-${{ matrix.stack }}.txt
+          path: |
+            plan-${{ matrix.stack }}.txt
+            plan-${{ matrix.stack }}-pdn.txt
           retention-days: 3
           if-no-files-found: ignore
