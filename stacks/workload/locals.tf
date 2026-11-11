@@ -80,4 +80,16 @@ locals {
       }
     }
   }
+
+  # Farm nodes (box D08). The public CSRs are read from files; private keys stay
+  # on the devices. Farm resources are costed to the farms cost center (ASM-064).
+  farm_nodes = {
+    for key, farm in var.farms : key => {
+      for role, csr_path in farm.node_csr_paths : role => { csr = file("${path.module}/${csr_path}") }
+    }
+  }
+
+  # The farm ingestion contract comes from var.farm_ingestion until B09b wires
+  # module.telemetry_ingestion; B09b replaces it with the module ingestion output.
+  farm_ingestion = var.farm_ingestion
 }

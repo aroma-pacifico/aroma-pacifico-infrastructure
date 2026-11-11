@@ -129,3 +129,21 @@ telemetry_references = {
   table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-dev-telemetry"
   topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_dev_telemetry"
 }
+
+# Farm inputs (B08b, box D08). One synthetic farm with the fixture CSRs of
+# stacks/workload/fixtures (ASM-422); real CSRs come from node provisioning.
+farms = {
+  f001 = {
+    farm_id        = "fixture-farm-001"
+    node_csr_paths = { crop = "fixtures/crop.csr", drying = "fixtures/drying.csr" }
+  }
+}
+
+# Fixture ingestion contract until telemetry ingestion (B09b) supplies its
+# ingestion output. The .invalid domain names no real host.
+farm_ingestion = {
+  environment    = "dev"
+  endpoint       = "ingestion.example.invalid"
+  policy_name    = "fixture-dev-device"
+  topic_template = "fixture/dev/telemetry/{thing_name}"
+}
