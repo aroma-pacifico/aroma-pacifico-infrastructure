@@ -1,0 +1,21 @@
+# Non-sensitive input variables for the qa environment (B03, box D03).
+# Copy to qa.tfvars and replace the placeholders. This file and its copy hold
+# names and codes only: never a password, token, key or account identifier
+# (PC-IAC-002 section 5.3, PC-IAC-016, ADR-003).
+# Every stack (state-backend, network, security, workload) takes these inputs.
+
+# us-east-1 is the single Region of every environment (ADR-001).
+aws_region  = "us-east-1"
+environment = "qa"
+
+# Governance tags applied through provider default_tags (PC-IAC-004).
+# Client and Project values are pending decision PD-070; Owner is a role code
+# (SR1, SR2, JR1 or JR2), never a person's name; CostCenter is one of farms,
+# drones, collection-centers, trips or shared (ASM-064).
+common_tags = {
+  Client      = "<client-pd-070>"
+  Project     = "<project-pd-070>"
+  Environment = "qa"
+  Owner       = "SR1"
+  CostCenter  = "shared"
+}
