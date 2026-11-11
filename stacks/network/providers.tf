@@ -9,14 +9,19 @@ provider "aws" {
   }
 }
 
-# Workload account: owns the VPC attachment (PC-IAC-005 alias "principal").
+# D05 association: workload account (owns the VPC attachment) and hub account
+# (owns the customer gateway, VPN and prefix list), PC-IAC-005. Without an
+# association both are unused and carry no account assertion.
 provider "aws" {
   alias               = "principal"
   region              = var.aws_region
-  allowed_account_ids = [var.network.account_id]
+  allowed_account_ids = var.center_association == null ? null : [var.center_association.workload_account_id]
 
-  assume_role {
-    role_arn = var.workload_plan_role_arn
+  dynamic "assume_role" {
+    for_each = var.center_association == null ? [] : [var.center_association.workload_plan_role_arn]
+    content {
+      role_arn = assume_role.value
+    }
   }
 
   default_tags {
@@ -24,14 +29,16 @@ provider "aws" {
   }
 }
 
-# Hub (network) account: owns the customer gateway, VPN and prefix list.
 provider "aws" {
   alias               = "network"
   region              = var.aws_region
-  allowed_account_ids = [var.hub.account_id]
+  allowed_account_ids = var.center_association == null ? null : [var.center_association.hub.account_id]
 
-  assume_role {
-    role_arn = var.network_plan_role_arn
+  dynamic "assume_role" {
+    for_each = var.center_association == null ? [] : [var.center_association.network_plan_role_arn]
+    content {
+      role_arn = assume_role.value
+    }
   }
 
   default_tags {

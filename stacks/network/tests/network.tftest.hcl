@@ -13,6 +13,18 @@ mock_provider "aws" {
   }
 }
 
+# The association providers (D05) are configured even when no association is
+# selected, so they are mocked too.
+mock_provider "aws" {
+  alias           = "principal"
+  override_during = plan
+}
+
+mock_provider "aws" {
+  alias           = "network"
+  override_during = plan
+}
+
 variables {
   aws_region = "us-east-1"
   common_tags = {
