@@ -40,6 +40,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-1
       TF_IN_AUTOMATION: "true"
+      # Fictitious value so stacks wired to modules/network can plan; it is not an account.
+      TF_VAR_organization_id: o-a1b2c3d4e5
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
       STACK: ${{ matrix.stack }}
     steps:
