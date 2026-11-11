@@ -94,6 +94,26 @@ interface_endpoints = {
   rola  = { service = "rolesanywhere", tier = "administration" }
 }
 
+# Security stack inputs (B06b, box D06); the other stacks ignore them.
+# Role names, never ARNs: the account identifier is read from the caller
+# identity at plan time. The apply role administers every key but cannot use
+# it (ASM-270). break_glass_role_patterns is the value set for the
+# state-backend section above. Key user names follow the function role pattern
+# <name_prefix>-rol-<function key> of modules/inference-functions and are
+# placeholders until the function keys of B10 are fixed. restricted stays empty
+# (ASM-165). protected_bucket_names stays empty until the bucket owners fix the
+# names. The SMS role and external ID are never kept here: supply
+# TF_VAR_field_sms_configuration only when SMS codes are enabled (ASM-272).
+security_apply_role_names = ["security-apply"]
+
+key_user_role_names = {
+  telemetry = ["clnt-proj-qa-rol-telemetry"]
+  records   = ["clnt-proj-qa-rol-telemetry"]
+  objects   = ["clnt-proj-qa-rol-drone"]
+}
+
+protected_bucket_names = []
+
 # Workload stack inputs (B10b, box D10). Cross-stack values are fixtures with the
 # all-zero emulator account until the producing stacks exist (ASM-420): replace
 # kms_key_arns with the kms_key_arns output of stacks/security, and the
