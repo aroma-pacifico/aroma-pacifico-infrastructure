@@ -107,7 +107,7 @@ CI and local runs use Terraform 1.15.8, the patch release recorded in `.terrafor
 
 ## CD promotion
 
-Promotion `dev`, `qa`, `pdn` with a mandatory production approval, the plan and Infracost cost delta shown to the approver, and the evidence of who approved is described in [docs/cd-pipeline.md](docs/cd-pipeline.md). The pipeline is plan-only: the approval gate approves a reviewed plan and nothing is applied.
+Promotion `dev`, `qa`, `pdn` with a two-step production approval (a requester dispatches the review run, a different approver listed in the variable `PDN_APPROVERS` dispatches the approval run against the plan digest), the plan and Infracost cost delta shown to the approver, and the evidence of who requested and approved is described in [docs/cd-pipeline.md](docs/cd-pipeline.md). The pipeline is plan-only: the approval gate approves a reviewed plan and nothing is applied. On the GitHub Free plan the gate is verifiable evidence, not a technical barrier (section 1 of the runbook).
 
 ## Diagram boxes
 

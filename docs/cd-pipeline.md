@@ -244,7 +244,7 @@ measurements, and are to be timed by the rehearsal PD-176.
 |---|---|
 | 1. Decide | A `pdn` approver (SR1 or SR2) decides to roll back and records the reason, or the incident reference. |
 | 2. Revert | Revert the squash commit on `main` through a pull request (`git revert <commit>` on a branch, never a direct push). A revert is a release candidate like any other. |
-| 3. Re-run the plan | Merge, then dispatch the promotion with `promote_to = qa`, then `pdn`. The reviewed plan of the revert should show the inverse of the original change; the approver reads the destroys and replacements first. |
+| 3. Re-run the plan | Merge, then dispatch the promotion with `promote_to = qa`, then `pdn` (the two runs of section 2.1). The reviewed plan of the revert should show the inverse of the original change; the approver reads the destroys and replacements first. |
 | 4. Notify | Update the release note status to `rolled_back` and send the outcome to the recipient of section 6. |
 
 If the state itself is damaged, recover it from the versioned state bucket of
@@ -260,15 +260,15 @@ perform the restore under an incident reference.
 
 ## 8. Deduplication against B11
 
-This workflow is deliberately self-contained so that it works whichever B11
-pull request merges. Pull requests #9, #10 and #11 are already on `main`
-(`infrastructure-ci.yml`, `infracost.yml`, `floci-plan.yml`); #12, which
-consolidates the same ground, is still open. Once the B11 set is settled, merge
-the duplicated parts into one place.
+This workflow is deliberately self-contained and depends on no B11 workflow.
+The whole B11 set is now on `main`: pull requests #9, #10 and #11
+(`infrastructure-ci.yml`, `infracost.yml`, `floci-plan.yml`) and #12, which
+completed the same ground and is merged. The duplicated parts can now be merged
+into one place in a follow-up change.
 
 | Duplicated piece | Here | In B11 |
 |---|---|---|
-| Floci service container, bucket creation, backend flags, plan loop | `cd-plan.yml` | `floci-plan.yml`, and the plan job of PR #12 if it lands. Extract one reusable plan workflow. |
+| Floci service container, bucket creation, backend flags, plan loop | `cd-plan.yml` | `floci-plan.yml`, completed by PR #12. Extract one reusable plan workflow. |
 | Checksum-pinned Infracost CLI install and `scan` invocation | `cost` job in `cd-promotion.yml` | `infracost.yml`. Extract a composite action. |
 | Per-stack Infracost project list | Generated at run time per environment | Root `infracost.yml`, which prices `qa` only. |
 | Terraform version read and setup | `cd-plan.yml` | `infrastructure-ci.yml`. |
@@ -283,13 +283,14 @@ B11 should re-check its pin.
 
 | Item | Blocked on | Owner |
 |---|---|---|
-| Configure Environment `pdn` with required reviewers, prevent self-review, `main` only | Repository administrator; PD-020 (plan support) | Human lead |
+| Set variable `PDN_APPROVERS` with the logins of the SR1 and SR2 approvers (section 4) | Repository administrator; the lead names the approvers | Human lead |
 | Add secret `INFRACOST_CLI_TOKEN`; confirm variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED` | Repository administrator | Human lead |
-| Add variable `HARVEST_WEEK_DATES` | The Federation calendar (ASM-008, PD-005) | Human lead |
-| Dedupe against B11 (section 8) | Decision on PR #12 versus the merged #9, #10 and #11 | B11 and B12 owners |
+| Add variable `HARVEST_WEEK_DATES` (empty until then: warning, no block) | The Federation calendar (ASM-008, PD-005) | Human lead |
+| Dedupe against B11 (section 8) | A follow-up change; the B11 set, including #12, is merged | B11 and B12 owners |
 | Meaningful plans and costs: today the stacks hold only provider, backend and variables, so every plan reads "no changes" and every estimate is zero | Stack wiring B04b, B06b, B07b, B09b | Task owners |
-| First real run of the workflows, including the approvals API record, the Infracost output shape and Floci readiness | A human dispatch after merge; none of this has been run | Human lead |
-| Decision-log entries for the choices in this document | `ASM-NNN` and `PD-NNN` numbers to be allocated in `aroma-pacifico-architecture` | Human lead |
+| First real dispatch of both runs, including the approval checks, the manifest digest, the Infracost output shape and Floci readiness | A human dispatch after merge; the workflows have never run on GitHub | Human lead |
+| Maximum age of run 1 for the approval | Not coded; to be decided | Human lead |
+| Decision-log entries for the choices in this document | ASM-320 to ASM-324 and the closing of PD-020 in `aroma-pacifico-architecture` | Human lead |
 | SVG and PNG export of the Mermaid flow, if the diagram standard is applied strictly | Diagram owner | Diagram owner |
 | Rollback rehearsal in `qa` | PD-176 | SR2 |
 | Apply stage | Out of scope while the project is plan-only; needs a lifted boundary and an ADR | Faculty advisor |
