@@ -67,7 +67,7 @@ terraform -chdir=stacks/security plan -lock=false \
   -var-file=../../environments/qa/qa.tfvars.example
 ```
 
-Each environment plans 29 resources to add, 0 to change and 0 to destroy: 8 keys, 8 aliases, 2 user pools, 7 groups, the revocation role with its policy, and one policy document read at apply time. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
+Each environment plans 31 resources to add, 0 to change and 0 to destroy: 8 keys, 8 aliases, 2 user pools, 7 groups, and three roles (revocation, IoT rule, IoT logging) with one policy each, plus the policy documents read at apply time. Nothing is applied: `terraform apply` and `terraform destroy` are never run.
 
 ## Verification
 

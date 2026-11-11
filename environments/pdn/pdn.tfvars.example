@@ -113,3 +113,39 @@ key_user_role_names = {
 }
 
 protected_bucket_names = []
+
+# Workload stack inputs (B10b, box D10). Cross-stack values are fixtures with the
+# all-zero emulator account until the producing stacks exist (ASM-420): replace
+# kms_key_arns with the kms_key_arns output of stacks/security, and the
+# telemetry references with the outputs of telemetry ingestion (B09b).
+inference_model_id = "amazon.nova-pro-v1:0"
+
+# Placeholder paths, relative to stacks/workload, until the release pipeline
+# publishes the packages (ASM-171, ASM-421).
+inference_function_packages = {
+  confrm = { filename = "build/confrm.zip" }
+  verify = { filename = "build/verify.zip" }
+  estim  = { filename = "build/estim.zip" }
+  thresh = { filename = "build/thresh.zip" }
+}
+
+kms_key_arns = {
+  telemetry = "arn:aws:kms:us-east-1:000000000000:key/fixture-pdn-telemetry"
+  objects   = "arn:aws:kms:us-east-1:000000000000:key/fixture-pdn-objects"
+  records   = "arn:aws:kms:us-east-1:000000000000:key/fixture-pdn-records"
+  logs      = "arn:aws:kms:us-east-1:000000000000:key/fixture-pdn-logs"
+}
+
+inference_targets = {
+  alert_table_arn              = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-alerts"
+  alert_topic_arn              = "arn:aws:sns:us-east-1:000000000000:fixture-pdn-alerts"
+  drone_event_rule_arn_pattern = "arn:aws:events:us-east-1:000000000000:rule/fixture-pdn-drone/*"
+  drone_object_arn_pattern     = "arn:aws:s3:::fixture-pdn-drone-objects/farms/*"
+  mission_table_arn            = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-missions"
+  thresholds_table_arn         = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-thresholds"
+}
+
+telemetry_references = {
+  table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-telemetry"
+  topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_pdn_telemetry"
+}
