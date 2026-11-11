@@ -71,8 +71,10 @@ pending_notes() {
   files=("stacks/$stack"/*.tf)
   has() { grep -qE "modules/$1\?ref=" "${files[@]}" 2> /dev/null; }
   case "$stack" in
-    network) has firewall-rules || echo "B07b: firewall rules module (D07) not wired in this stack yet" ;;
-    security) has security || echo "B06b: security module (D06) not wired in this stack yet" ;;
+    security)
+      has security || echo "B06b: security module (D06) not wired in this stack yet"
+      has firewall-rules || echo "B07b: firewall rules module (D07) not wired in this stack yet"
+      ;;
     workload)
       has farm || echo "B08b: farm module (D08) not wired in this stack yet"
       has telemetry-ingestion || echo "B09b: telemetry ingestion module (D09) not wired in this stack yet"
