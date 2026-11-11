@@ -14,7 +14,7 @@ mock_provider "aws" {
   }
 
   # The queue URL is computed by AWS; the mock returns the documented shape so
-  # that the threshold_queue_url contract of B09b can be asserted.
+  # that the threshold_queue_url contract of the telemetry ingestion can be asserted.
   mock_resource "aws_sqs_queue" {
     defaults = { url = "https://sqs.us-east-1.amazonaws.com/000000000000/fixture-queue" }
   }
@@ -55,19 +55,14 @@ variables {
     thresholds_table_arn         = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-qa-thresholds"
   }
 
-  telemetry_references = {
-    table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-qa-telemetry"
-    topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_qa_telemetry"
-  }
+  iot_logging_role_arn = "arn:aws:iam::000000000000:role/fixture-qa-iot-logging"
+  iot_rule_role_arn    = "arn:aws:iam::000000000000:role/fixture-qa-iot-rule"
+
+  telemetry_tls_security_policy = "IoTSecurityPolicy_TLS13_1_2_2022_10"
+  telemetry_topic_namespace     = "fixture/qa/telemetry"
 
   # Farm inputs (B08b) are required by the stack; no farm is planned here.
   farms = {}
-  farm_ingestion = {
-    environment    = "qa"
-    endpoint       = "ingestion.example.invalid"
-    policy_name    = "fixture-qa-device"
-    topic_template = "fixture/qa/telemetry/{thing_name}"
-  }
 }
 
 run "plans_the_four_functions_of_the_design" {

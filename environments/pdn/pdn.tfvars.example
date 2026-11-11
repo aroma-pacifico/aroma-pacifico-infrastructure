@@ -116,8 +116,8 @@ protected_bucket_names = []
 
 # Workload stack inputs (B10b, box D10). Cross-stack values are fixtures with the
 # all-zero emulator account until the producing stacks exist (ASM-420): replace
-# kms_key_arns with the kms_key_arns output of stacks/security, and the
-# telemetry references with the outputs of telemetry ingestion (B09b).
+# kms_key_arns with the kms_key_arns output of stacks/security, and the two
+# IoT role ARNs with its iot_rule_role_arn and iot_logging_role_arn outputs.
 inference_model_id = "amazon.nova-pro-v1:0"
 
 # Placeholder paths, relative to stacks/workload, until the release pipeline
@@ -145,10 +145,15 @@ inference_targets = {
   thresholds_table_arn         = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-thresholds"
 }
 
-telemetry_references = {
-  table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-pdn-telemetry"
-  topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_pdn_telemetry"
-}
+# Telemetry ingestion inputs (B09b, box D09). The role ARNs are fixtures for the
+# outputs of stacks/security. The topic namespace and the TLS policy are not
+# fixed by the design (PD-100): these are synthetic placeholders, to be replaced
+# by the values that the decision log records.
+iot_logging_role_arn = "arn:aws:iam::000000000000:role/fixture-pdn-iot-logging"
+iot_rule_role_arn    = "arn:aws:iam::000000000000:role/fixture-pdn-iot-rule"
+
+telemetry_tls_security_policy = "IoTSecurityPolicy_TLS13_1_2_2022_10"
+telemetry_topic_namespace     = "fixture/pdn/telemetry"
 
 # Farm inputs (B08b, box D08). One synthetic farm with the fixture CSRs of
 # stacks/workload/fixtures (ASM-422); real CSRs come from node provisioning.
@@ -157,13 +162,4 @@ farms = {
     farm_id        = "fixture-farm-001"
     node_csr_paths = { crop = "fixtures/crop.csr", drying = "fixtures/drying.csr" }
   }
-}
-
-# Fixture ingestion contract until telemetry ingestion (B09b) supplies its
-# ingestion output. The .invalid domain names no real host.
-farm_ingestion = {
-  environment    = "pdn"
-  endpoint       = "ingestion.example.invalid"
-  policy_name    = "fixture-pdn-device"
-  topic_template = "fixture/pdn/telemetry/{thing_name}"
 }
