@@ -13,7 +13,7 @@ mock_provider "aws" {
   }
 
   # The queue URL is computed by AWS; the mock returns the documented shape so
-  # that the threshold_queue_url contract of B09b can be asserted.
+  # that the threshold_queue_url contract of the telemetry ingestion can be asserted.
   # Certificates created from a CSR return no key material.
   mock_resource "aws_iot_certificate" {
     defaults = { private_key = "", public_key = "" }
@@ -59,22 +59,17 @@ variables {
     thresholds_table_arn         = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-qa-thresholds"
   }
 
-  telemetry_references = {
-    table_arn      = "arn:aws:dynamodb:us-east-1:000000000000:table/fixture-qa-telemetry"
-    topic_rule_arn = "arn:aws:iot:us-east-1:000000000000:rule/fixture_qa_telemetry"
-  }
+  iot_logging_role_arn = "arn:aws:iam::000000000000:role/fixture-qa-iot-logging"
+  iot_rule_role_arn    = "arn:aws:iam::000000000000:role/fixture-qa-iot-rule"
+
+  telemetry_tls_security_policy = "IoTSecurityPolicy_TLS13_1_2_2022_10"
+  telemetry_topic_namespace     = "fixture/qa/telemetry"
 
   farms = {
     f001 = {
       farm_id        = "fixture-farm-001"
       node_csr_paths = { crop = "fixtures/crop.csr", drying = "fixtures/drying.csr" }
     }
-  }
-  farm_ingestion = {
-    environment    = "qa"
-    endpoint       = "ingestion.example.invalid"
-    policy_name    = "fixture-qa-device"
-    topic_template = "fixture/qa/telemetry/{thing_name}"
   }
 }
 

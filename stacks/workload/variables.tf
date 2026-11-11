@@ -76,25 +76,42 @@ variable "permissions_boundary_arn" {
   default     = null
 }
 
-variable "telemetry_references" {
-  type = object({
-    table_arn      = string
-    topic_rule_arn = string
-  })
-  description = "Telemetry table read by the threshold function and topic rule allowed to send to its queue. These are the telemetry_table_arn and topic_rule_arn outputs of modules/telemetry-ingestion; B09b replaces this variable with them (see README)."
+# Telemetry ingestion inputs (B09b), alphabetical among themselves. The roles are
+# outputs of stacks/security and reach this stack as variables (ASM-420). The
+# design fixes neither the topic scheme nor the TLS policy name (PD-100), so
+# they have no default; the examples hold synthetic fixtures.
+
+variable "iot_logging_role_arn" {
+  type        = string
+  description = "Role that AWS IoT Core assumes to write its logs, the iot_logging_role_arn output of stacks/security (B06b)."
+
+  validation {
+    condition     = can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$", var.iot_logging_role_arn))
+    error_message = "iot_logging_role_arn must be an IAM role ARN."
+  }
+}
+
+variable "iot_rule_role_arn" {
+  type        = string
+  description = "Role that the telemetry topic rule assumes, the iot_rule_role_arn output of stacks/security (B06b)."
+
+  validation {
+    condition     = can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$", var.iot_rule_role_arn))
+    error_message = "iot_rule_role_arn must be an IAM role ARN."
+  }
+}
+
+variable "telemetry_tls_security_policy" {
+  type        = string
+  description = "Predefined AWS IoT Core security policy of the data endpoint, with a minimum of TLS 1.2 (CL-TEL-01, PD-100). The design names IoTSecurityPolicy_TLS13_1_2_2022_10 only as an example, so the choice is an input."
+}
+
+variable "telemetry_topic_namespace" {
+  type        = string
+  description = "Topic levels above the thing name: a node publishes only to <namespace>/<thing name>. One to six levels of letters, digits, underscores and hyphens. The design does not fix the scheme, so the choice is an input."
 }
 
 # Farm inputs (B08b), alphabetical among themselves.
-
-variable "farm_ingestion" {
-  type = object({
-    environment    = string
-    endpoint       = string
-    policy_name    = string
-    topic_template = string
-  })
-  description = "Same-environment ingestion contract of every farm: IoT endpoint hostname, device policy name and topic template with one {thing_name} placeholder. It has the shape of the ingestion output of modules/telemetry-ingestion; B09b replaces this variable with that output (see README)."
-}
 
 variable "farms" {
   type = map(object({

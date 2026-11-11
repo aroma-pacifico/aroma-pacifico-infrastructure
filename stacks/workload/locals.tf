@@ -11,14 +11,21 @@ locals {
   project     = lower(var.common_tags["Project"])
   name_prefix = "${local.client}-${local.project}-${var.environment}"
 
-  # Retention of the function log groups; the observability design uses 365 days.
+  # Retention of the function and IoT Core log groups; the observability design
+  # uses 365 days.
   log_retention_days = 365
 
-  # The threshold function (box D10) reads from the telemetry domain (box D09).
-  # Until B09b wires module.telemetry_ingestion, both references come from
-  # var.telemetry_references; B09b replaces them with the module outputs here.
-  telemetry_table_arn = var.telemetry_references.table_arn
-  telemetry_rule_arn  = var.telemetry_references.topic_rule_arn
+  # Readings are kept 5 years (case statement, farm monitoring design section
+  # 3.3). The module counts the expiry from the receive time (ASM-311), so the
+  # day count must cover any 5 years, leap day included: 5 * 365 + 1.
+  telemetry_retention_days = 5 * 365 + 1
+
+  # The threshold function (box D10) reads from the telemetry domain (box D09)
+  # and accepts the topic rule as sender. The module builds topic_rule_arn from
+  # the rule name, so these references create no cycle with the queue URL that
+  # the module takes from the inference functions.
+  telemetry_table_arn = module.telemetry_ingestion.telemetry_table_arn
+  telemetry_rule_arn  = module.telemetry_ingestion.topic_rule_arn
 
   # The three drone functions share one shape (ASM-161, ASM-162) and differ in
   # their package and description. Sizing and retry values are the module
@@ -89,7 +96,7 @@ locals {
     }
   }
 
-  # The farm ingestion contract comes from var.farm_ingestion until B09b wires
-  # module.telemetry_ingestion; B09b replaces it with the module ingestion output.
-  farm_ingestion = var.farm_ingestion
+  # The same-environment ingestion contract of every farm (endpoint, device
+  # policy and topic template) is the ingestion output of the module.
+  farm_ingestion = module.telemetry_ingestion.ingestion
 }
