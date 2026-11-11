@@ -1,8 +1,10 @@
-# Replace REQUIRED values only after the account owner verifies the backend.
-bucket              = "REQUIRED_PDN_STATE_BUCKET"
-key                 = "security/terraform.tfstate"
-region              = "us-east-1"
-encrypt             = true
-use_lockfile        = true
-kms_key_id          = "REQUIRED_PDN_STATE_KMS_KEY_ARN"
-allowed_account_ids = ["REQUIRED_PDN_ACCOUNT_ID"]
+# Partial S3 backend configuration for security in pdn (B02, ADR-003, PC-IAC-008).
+# Example values only. Copy to pdn.s3.tfbackend, replace the placeholders with
+# the names created by the state-backend stack, then pass it to terraform init
+# with -backend-config. Never commit the real file (it is git-ignored).
+bucket       = "<client>-<project>-pdn-state"
+key          = "security/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+kms_key_id   = "alias/<client>-<project>-pdn-state"
+use_lockfile = true
