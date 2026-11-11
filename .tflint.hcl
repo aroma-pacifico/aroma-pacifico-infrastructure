@@ -1,5 +1,6 @@
 config {
   call_module_type = "local"
+  force            = false
 }
 
 plugin "terraform" {
@@ -13,11 +14,11 @@ plugin "aws" {
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
 
-rule "terraform_comment_syntax" {
+rule "terraform_documented_variables" {
   enabled = true
 }
 
-rule "terraform_naming_conventions" {
+rule "terraform_typed_variables" {
   enabled = true
 }
 
@@ -25,11 +26,7 @@ rule "terraform_documented_outputs" {
   enabled = true
 }
 
-rule "terraform_documented_variables" {
-  enabled = true
-}
-
-rule "terraform_typed_variables" {
+rule "terraform_required_providers" {
   enabled = true
 }
 
@@ -45,6 +42,6 @@ rule "terraform_deprecated_interpolation" {
   enabled = true
 }
 
-rule "terraform_standard_module_structure" {
+rule "terraform_comment_syntax" {
   enabled = true
 }
