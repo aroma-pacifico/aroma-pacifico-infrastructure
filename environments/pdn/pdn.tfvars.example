@@ -9,13 +9,43 @@ aws_region  = "us-east-1"
 environment = "pdn"
 
 # Governance tags applied through provider default_tags (PC-IAC-004).
-# Client and Project values are pending decision PD-070; Owner is a role code
-# (SR1, SR2, JR1 or JR2), never a person's name; CostCenter is one of farms,
-# drones, collection-centers, trips or shared (ASM-064).
+# Client and Project values are pending decision PD-070 (the placeholders are
+# lowercase letters and digits because the state bucket name is built from
+# them); Owner is a role code (SR1, SR2, JR1 or JR2), never a person's name;
+# CostCenter is one of farms, drones, collection-centers, trips or shared
+# (ASM-064).
 common_tags = {
-  Client      = "<client-pd-070>"
-  Project     = "<project-pd-070>"
+  Client      = "clipd070"
+  Project     = "prjpd070"
   Environment = "pdn"
   Owner       = "SR1"
   CostCenter  = "shared"
+}
+
+# Inputs of the state-backend stack only (B02, box D02); the other stacks ignore
+# them. Role names, never ARNs: the account identifier is read from the caller
+# identity at plan time. The names are placeholders until B06 provides the real
+# identities. A plan role never administers the key, and plan and write roles
+# are different across domains.
+key_administrator_role_names    = ["state-backend-apply"]
+configuration_reader_role_names = ["state-auditor"]
+break_glass_role_patterns       = ["aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_BreakGlass_*"]
+
+domain_access = {
+  network = {
+    plan_role_names  = ["network-plan"]
+    write_role_names = ["network-apply"]
+  }
+  security = {
+    plan_role_names  = ["security-plan"]
+    write_role_names = ["security-apply"]
+  }
+  workload = {
+    plan_role_names  = ["workload-plan"]
+    write_role_names = ["workload-apply"]
+  }
+  state-backend = {
+    plan_role_names  = ["state-backend-plan"]
+    write_role_names = ["state-backend-apply"]
+  }
 }
