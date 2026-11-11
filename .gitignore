@@ -18,6 +18,15 @@ override.tf.json
 *credentials*.csv
 *accessKeys*.csv
 *.auto.tfvars
+*.tfvars
+*.tfvars.json
+*.tfbackend
+!*.tfvars.example
+!*.tfbackend.example
+*.tflock
+*.plan
+*.plan.json
+tfplan
 
 # Editors and OS
 .local/

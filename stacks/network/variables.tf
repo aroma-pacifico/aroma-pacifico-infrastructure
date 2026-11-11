@@ -4,36 +4,6 @@
 variable "aws_region" {
   type        = string
   description = "AWS Region where this stack manages resources."
-
-  validation {
-    condition     = var.aws_region == "us-east-1" && var.aws_region == var.hub.region
-    error_message = "The workload and hub providers must use the approved primary Region, us-east-1 (ADR-001)."
-  }
-}
-
-variable "collection_center" {
-  description = "One A11 center key; optional department and CIDR assertions must match the approved catalog."
-  type = object({
-    key        = string
-    department = optional(string)
-    cidr_block = optional(string)
-  })
-  nullable = false
-
-  validation {
-    condition     = contains(keys(local.collection_centers), var.collection_center.key)
-    error_message = "Select exactly one center: cauca, huila, or tolima."
-  }
-
-  validation {
-    condition     = var.collection_center.department == null ? true : try(var.collection_center.department == local.collection_centers[var.collection_center.key].department, false)
-    error_message = "The asserted department must match the selected center."
-  }
-
-  validation {
-    condition     = var.collection_center.cidr_block == null ? true : try(var.collection_center.cidr_block == local.collection_centers[var.collection_center.key].cidr_block, false)
-    error_message = "The asserted CIDR must exactly match the selected department's approved /16."
-  }
 }
 
 variable "common_tags" {
@@ -46,68 +16,93 @@ variable "common_tags" {
   }
 }
 
+# Used only by its own validation until the stack is wired to modules.
+# tflint-ignore: terraform_unused_declarations
 variable "environment" {
-  description = "Permanent center-link target; only pdn is permitted by ASM-121 and CL-LNK-01 to 05."
   type        = string
-  nullable    = false
+  description = "Environment code: dev, qa or pdn."
 
   validation {
-    condition     = var.environment == "pdn"
-    error_message = "Permanent center associations target pdn only; dev is isolated and temporary qa acceptance wiring is outside this contract."
+    condition     = contains(["dev", "qa", "pdn"], var.environment)
+    error_message = "environment must be one of dev, qa or pdn."
   }
 }
 
-variable "hub" {
-  description = "Externally owned shared Transit Gateway account, Region and ACM certificate reference (public references only; never a key or PSK)."
+# Network inputs (B04b), alphabetical among themselves. They follow the
+# governance variables shared by every stack.
+
+variable "collection_center_summary_cidr_block" {
+  type        = string
+  description = "Single CIDR block that summarizes every present and future collection center, routed through the transit gateway (10.40.0.0/13 in the addressing plan)."
+
+  validation {
+    condition     = can(cidrhost(var.collection_center_summary_cidr_block, 0))
+    error_message = "collection_center_summary_cidr_block must be a valid IPv4 CIDR block."
+  }
+}
+
+variable "collection_centers" {
+  type = map(object({
+    cidr_block                = string
+    firewall_cidr_block       = string
+    ground_station_cidr_block = string
+  }))
+  description = "Collection centers keyed by name. The CIDR block is the reserved /16 of the center; the firewall and ground station are /32 hosts inside it. Must include the three blocks reserved by the case statement (10.41.0.0/16, 10.42.0.0/16 and 10.43.0.0/16)."
+
+  validation {
+    condition     = length(setsubtract(toset(local.reserved_center_cidr_blocks), toset([for center in values(var.collection_centers) : center.cidr_block]))) == 0
+    error_message = "collection_centers must include the reserved blocks 10.41.0.0/16, 10.42.0.0/16 and 10.43.0.0/16."
+  }
+}
+
+variable "data_store_ports" {
+  type        = list(number)
+  description = "TCP ports of the data store that the application tier may reach (CL-DAT-02). The port is selected by the data design (A13); an empty list leaves the data tier denying everything."
+}
+
+variable "flow_logs" {
   type = object({
-    account_id               = string
-    region                   = string
-    transit_gateway_id       = string
-    customer_certificate_arn = string
+    destination_arn = string
+    iam_role_arn    = string
   })
-  nullable = false
-
-  validation {
-    condition     = can(regex("^[0-9]{12}$", var.hub.account_id)) && can(regex("^tgw-[0-9a-f]{8,17}$", var.hub.transit_gateway_id))
-    error_message = "hub needs a 12-digit owner account and a Transit Gateway reference."
-  }
+  description = "CloudWatch Logs destination and IAM role of the flow log of rejected traffic, supplied by the security stack (B06b). Null disables flow logs."
+  default     = null
 }
 
-variable "network" {
-  description = "B04 outputs for the VPC that attaches to the hub, plus the explicit environment and owner account."
-  type = object({
-    environment                   = string
-    account_id                    = string
-    vpc_id                        = string
-    vpc_cidr_block                = string
-    transit_attachment_subnet_ids = list(string)
-  })
-  nullable = false
-
-  validation {
-    condition     = var.network.environment == var.environment && can(regex("^[0-9]{12}$", var.network.account_id))
-    error_message = "network must describe the selected environment and an explicit 12-digit owner account."
-  }
+variable "interface_endpoints" {
+  type = map(object({
+    service = string
+    tier    = string
+  }))
+  description = "Interface endpoints keyed by a short name (at most 6 characters). Each names the service suffix and the tier that hosts it: application, object_storage or administration."
 }
 
-variable "network_plan_role_arn" {
-  description = "Externally supplied plan role in the hub (network) account; never credentials."
+variable "organization_id" {
   type        = string
-  nullable    = false
-
-  validation {
-    condition     = can(regex("^arn:aws:iam::${var.hub.account_id}:role/[A-Za-z0-9+=,.@_/-]+$", var.network_plan_role_arn))
-    error_message = "An explicit plan role in the hub owner account is required."
-  }
+  description = "AWS Organizations ID admitted by the gateway endpoint policies. Not kept in any variable file: supply it as TF_VAR_organization_id from the environment."
 }
 
-variable "workload_plan_role_arn" {
-  description = "Externally supplied plan role in the workload (VPC owner) account; never credentials."
+variable "subnets" {
+  type        = map(map(string))
+  description = "Subnet CIDR blocks keyed by tier and Availability Zone slot (az1 to az3), from section 4.3 of the addressing plan."
+}
+
+variable "transit_gateway_id" {
   type        = string
-  nullable    = false
+  description = "Transit gateway of the network account. Null creates no route to the collection centers."
+  default     = null
+}
+
+variable "vpc_cidr_block" {
+  type        = string
+  description = "Primary IPv4 CIDR block of the environment VPC. Distinct per environment and never overlapping the collection center blocks (case statement point 3)."
 
   validation {
-    condition     = can(regex("^arn:aws:iam::${var.network.account_id}:role/[A-Za-z0-9+=,.@_/-]+$", var.workload_plan_role_arn))
-    error_message = "An explicit plan role in the VPC owner account is required."
+    condition = can(cidrhost(var.vpc_cidr_block, 0)) && try(alltrue([
+      for range in local.reserved_ranges :
+      sum([for index, octet in split(".", cidrhost(var.vpc_cidr_block, 0)) : tonumber(octet) * pow(256, 3 - index)]) + pow(2, 32 - tonumber(split("/", var.vpc_cidr_block)[1])) - 1 < range.first
+      || range.last < sum([for index, octet in split(".", cidrhost(var.vpc_cidr_block, 0)) : tonumber(octet) * pow(256, 3 - index)])
+    ]), false)
+    error_message = "vpc_cidr_block must not overlap 10.41.0.0/16, 10.42.0.0/16 or 10.43.0.0/16."
   }
 }

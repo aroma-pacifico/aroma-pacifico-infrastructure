@@ -94,3 +94,12 @@ jobs:
           scan-ref: stacks/${{ matrix.stack }}
           exit-code: "1"
           severity: HIGH,CRITICAL
+
+      - name: Run unit tests (terraform test)
+        run: |
+          stack="stacks/${{ matrix.stack }}"
+          if [ -d "$stack/tests" ]; then
+            terraform -chdir="$stack" test
+          else
+            echo "No tests directory in $stack; skipping test suite."
+          fi
