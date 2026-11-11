@@ -1,4 +1,0 @@
-# STEADY STATE ONLY: never include this before the bucket exists and the bootstrap procedure is authorized.
-terraform {
-  backend "s3" {}
-}
