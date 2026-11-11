@@ -60,6 +60,21 @@ terraform -chdir=stacks/network validate
 
 Repeat the `init` and `validate` pair for `state-backend`, `security` and `workload`. A real `terraform plan` needs the backend file of an environment and plan-only credentials, and is produced by the CI pipeline (B11), never by `apply`.
 
+## CI pipeline
+
+The continuous integration pipeline validates and exercises every root stack on every pull request targeting `main` and on pushes to `main` (trunk-based development, PC-IAC-027, PC-IAC-028).
+
+The pipeline comprises two automated workflows:
+
+1. **Infrastructure CI** (`.github/workflows/infrastructure-ci.yml`):
+   - **Secret scan**: inspects all variable, backend, and environment example files with `scripts/check-env-secrets.sh` to ensure no credentials, tokens, or account numbers are committed.
+   - **Validation gates**: runs `terraform fmt -check`, `terraform init -backend=false`, `terraform validate`, `tflint` against the AWS ruleset, Trivy security configuration scan, and `terraform test` (where tests exist) across all root stacks in `stacks/*`.
+   - **Speculative plan against Floci**: executes a speculative `terraform plan -out` across each root stack using the pinned Floci AWS emulator (`floci/floci@sha256:5ee85db604c4aa74ac76e07ea5cc83086f37bb472bf3dbb97e34019e48efae9c`). Exercises remote state initialization against an emulator S3 state bucket with `use_path_style = true` and native S3 state locking (`use_lockfile = true`), publishes the plan outcome to the GitHub Actions job summary, and preserves the plan artifact for review. Operates with zero cloud credentials and strict plan-only discipline (`terraform apply` and `terraform destroy` are strictly forbidden).
+2. **Infracost cost impact** (`.github/workflows/infracost.yml`):
+   - Calculates baseline, proposed, and monthly cost delta across each root stack using Infracost CLI v2 with the non-sensitive QA example variables (`environments/qa/qa.tfvars.example`).
+   - Requires zero cloud credentials, authenticating solely with the organization token secret `INFRACOST_CLI_TOKEN` and repository variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED`.
+   - Degrades gracefully to report "estimate unavailable" when credentials or egress approval are absent, without claiming false zero-cost figures.
+
 ## Terraform version
 
 CI and local runs use Terraform 1.15.8, the patch release recorded in `.terraform-version` (ADR-003 asks B01 to record one exact patch at or above the `>= 1.14.0` floor). Provider locks include hashes for Linux, macOS and Windows so that CI on Linux and local runs on other systems resolve the same provider build.
