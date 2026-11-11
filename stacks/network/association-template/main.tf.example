@@ -1,0 +1,16 @@
+# Inactive until a genuine reviewed SemVer release is available.
+module "association" {
+  source    = "git::https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules.git//modules/collection-center-association?ref=REQUIRED_REVIEWED_RELEASE"
+  providers = { aws.project = aws.principal, aws.network = aws.network }
+
+  client      = var.common_tags.Client
+  project     = var.common_tags.Project
+  environment = var.environment
+
+  name_prefix     = local.association_name_prefix
+  additional_tags = var.common_tags
+
+  center  = local.association_center
+  network = local.association_network
+  hub     = local.association_hub
+}

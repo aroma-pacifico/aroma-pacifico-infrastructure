@@ -1,4 +1,8 @@
+mock_provider "aws" {}
+
 variables {
+  aws_region        = "us-east-1"
+  common_tags       = { Client = "fx", Project = "cf", Environment = "pdn", Owner = "fixture", CostCenter = "collection-centers" }
   environment       = "pdn"
   collection_center = { key = "cauca" }
 }

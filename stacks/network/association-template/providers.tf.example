@@ -1,0 +1,14 @@
+provider "aws" {
+  alias               = "principal"
+  region              = var.aws_region
+  allowed_account_ids = [var.network.account_id]
+  assume_role { role_arn = var.workload_plan_role_arn }
+  default_tags { tags = var.common_tags }
+}
+provider "aws" {
+  alias               = "network"
+  region              = var.aws_region
+  allowed_account_ids = [var.hub.account_id]
+  assume_role { role_arn = var.network_plan_role_arn }
+  default_tags { tags = var.common_tags }
+}
