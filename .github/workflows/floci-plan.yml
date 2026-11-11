@@ -77,6 +77,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          for i in {1..30}; do
+            if curl -s "http://localhost:4566/_localstack/health" >/dev/null 2>&1 || aws s3 ls >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
           aws s3 mb s3://floci-plan-state
 
       - name: Initialize against the emulator (terraform init)

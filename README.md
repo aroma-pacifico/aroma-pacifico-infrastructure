@@ -84,6 +84,18 @@ terraform -chdir=stacks/network validate
 
 Repeat the `init` and `validate` pair for `state-backend`, `security` and `workload`. A real `terraform plan` needs the backend file of an environment and plan-only credentials, and is produced by the CI pipeline (B11), never by `apply`.
 
+## CI pipeline
+
+The continuous integration pipeline validates and exercises every root stack on every pull request targeting `main` and on pushes to `main` (trunk-based development, PC-IAC-027, PC-IAC-028). It is split into three workflows that run in parallel, none of which uses real cloud credentials or runs `terraform apply` or `terraform destroy`.
+
+`Infrastructure CI` (`.github/workflows/infrastructure-ci.yml`) scans variable, backend and example files for secrets with `scripts/check-env-secrets.sh`, then runs, for each stack in `stacks/*`, `terraform fmt -check`, `terraform init -backend=false`, `terraform validate`, `tflint` with the AWS ruleset, a Trivy configuration scan and `terraform test` where a `tests` directory exists.
+
+`Floci plan` (`.github/workflows/floci-plan.yml`) runs a speculative `terraform plan` of each root stack against the Floci AWS emulator, pinned by image digest. It creates a throwaway state bucket in the emulator, initializes the S3 backend with path style, plans with the qa example variables, writes the plan summary to the job summary and keeps the plan text as a three-day artifact. The emulator uses the fixed test keys of PC-IAC-028, never real credentials.
+
+`Infracost cost impact` (`.github/workflows/infracost.yml`) estimates the monthly cost before, after and as a delta for each root stack with Infracost CLI v2 and the non-sensitive qa example variables. It authenticates only with the organization token secret `INFRACOST_CLI_TOKEN` and the repository variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED`, and it reports "estimate unavailable" when they are missing instead of claiming a zero cost.
+
+Promotion across environments is a separate pipeline, `CD promotion` (`.github/workflows/cd-promotion.yml`).
+
 ## Terraform version
 
 CI and local runs use Terraform 1.15.8, the patch release recorded in `.terraform-version` (ADR-003 asks B01 to record one exact patch at or above the `>= 1.14.0` floor). Provider locks include hashes for Linux, macOS and Windows so that CI on Linux and local runs on other systems resolve the same provider build.
