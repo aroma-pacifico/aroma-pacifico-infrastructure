@@ -51,7 +51,7 @@ Only the outputs that other stacks and modules need are exposed (PC-IAC-019 sect
 |---|---|---|
 | `threshold_queue_url` | `telemetry_ingestion.tf` | Same value as the `queue_urls` entry of `thresh` that the module receives: the topic rule sends each reading there (ASM-161). |
 | `queue_urls` | replay tooling | Trigger queue URL of each function. |
-| `queue_arns` | B06b | Send permission of the telemetry rule role on the threshold queue. |
+| `queue_arns` | drone event rules | Trigger queue ARN of each function. The security module scopes the telemetry rule role to the threshold queue by name (`<prefix>-sqs-thresh`), so it does not read this output. |
 | `key_user_arns` | B06b | `key_user_arns` input of the security module, so the key policies name the function roles. |
 | `inference_function_names`, `dead_letter_queue_names` | observability | Function and dead-letter queue alarms. |
 | `farm_node_names`, `farm_telemetry_topics` | node provisioning | MQTT client identifier and publish topic of each node. |
