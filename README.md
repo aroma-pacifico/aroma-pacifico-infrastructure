@@ -21,6 +21,7 @@ stacks/
 |-- security/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
 `-- workload/  (backend.tf, versions.tf, backends/*.s3.tfbackend.example)
 scripts/prepare-backend.py
+scripts/verify-backends.py
 docs/remote-state.md
 docs/d02-technical-evidence.md
 docs/decision-log.md

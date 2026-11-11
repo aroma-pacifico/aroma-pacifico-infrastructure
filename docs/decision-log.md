@@ -7,7 +7,7 @@ No new account, bucket name, role, retention period or deployment approval is as
 
 | ID | Status | Decision or dependency requiring follow-up |
 |---|---|---|
-| PD-B02-001 | Open | SR1/SR2 must reconcile ADR-003's self-hosted bootstrap state with this task's explicit prohibition and approve independent bootstrap-state ownership before bootstrap code or migration. |
+| PD-B02-001 | Superseded by merged design; implementation incomplete | ADR-003 and A20/ASM-213 assign the state bucket/key to B02 in stacks/state-backend and design self-hosted state after migration. Independent external state is not an approved requirement. Reusable resource code, bootstrap-root wiring, a real module release and an authorized execution procedure are absent; no migration is allowed in this task. |
 | PD-B02-002 | Open | B01 (aroma-pacifico/aroma-pacifico-roadmap#21) remains open; it must complete root/provider/environment/CI baseline, choose the exact Terraform CI patch >= 1.14.0 and integrate these backend-only domain scaffolds. No provider patch is guessed here. |
 | PD-B02-003 | Open | Backend owner must supply verified distinct environment account IDs, bucket names, state CMK ARNs and evidence of versioning, TLS enforcement, public-access blocks, recovery protections and IAM. |
 | PD-B02-004 | Open | A19's D02 diagram source/export is absent locally and in the remote diagrams main tree. Architecture section 14 maps D02 to B02, but visual conformance remains unverified. |

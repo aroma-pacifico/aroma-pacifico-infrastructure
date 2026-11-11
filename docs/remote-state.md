@@ -20,7 +20,13 @@ ADR-003 in the architecture repository selects domain roots `stacks/network`, `s
 
 ## Offline validation and future initialization
 
-From the repository root, run `python scripts/prepare-backend.py --templates`, `terraform fmt -check -recursive`, and, for each domain root, `terraform -chdir=stacks/network init -backend=false -input=false` followed by `terraform -chdir=stacks/network validate` (replace `network` for the other two). Offline validation never proves bucket reachability, permissions or security.
+From the repository root, run `python scripts/prepare-backend.py --templates`,
+`python scripts/verify-backends.py`, `terraform fmt -check -recursive`, and, for
+each domain root, `terraform -chdir=stacks/network init -backend=false -input=false`
+followed by `terraform -chdir=stacks/network validate` (replace `network` for the
+other two). The tracked verifier tests synthetic configuration and rejects
+unsafe or incomplete inputs; it only inspects printed initialization commands.
+Offline validation never proves bucket reachability, permissions or security.
 
 After the blockers are resolved, copy each `.example` file to the same path without `.example`. Replace only the REQUIRED identifiers with owner-verified values, consistent across domains. Real backend files are ignored by Git and must contain no credentials. The supplied literal-file format deliberately excludes custom endpoints, insecure TLS options, profiles and arbitrary HCL expressions.
 
@@ -30,7 +36,19 @@ Future `init` loads backend settings and modules/providers and contacts S3; it d
 
 ## Bootstrap contract (not provisioned)
 
-The bucket and KMS key must exist **before** backend-enabled initialization. No existing backend resources or identities have been verified. Before any future provisioning, SR1/SR2 must resolve ADR-003's self-hosted bootstrap-state instruction against this task's prohibition on self-hosting. Do not create a local bootstrap state, a second unapproved backend, or a `stacks/state-backend` deployment here. The bootstrap resources must be owned by independently managed, approved remote state outside the buckets they create. Its location and ownership remain pending.
+The bucket and KMS key must exist **before** backend-enabled initialization.
+No existing backend resources or identities have been verified. The merged
+100-hour plan (`docs/iac-plan-100h.md`, ASM-213, architecture PR #38) explicitly
+assigns the state bucket and state KMS key to B02 in `stacks/state-backend`.
+ADR-003 designs migration of that stack's state into its own bucket. This
+supersedes the earlier local register's assumption that independent external
+bootstrap-state ownership was mandatory; no such alternative is approved.
+The resource module, bootstrap root and released module interface are still
+missing. B01 has not delivered its root/provider/environment baseline. This
+branch supplies only the three consumer backend scaffolds, not the complete
+B02 resource graph. PD-019 still governs plan evidence. No bootstrap, local
+shared state, migration or cloud initialization is performed; a future execution
+procedure requires separate authorization within the plan-only constitution.
 
 The independently approved bootstrap must specify one bucket per environment in its workload account, versioning enabled, all four S3 Block Public Access settings, BucketOwnerEnforced ownership, default SSE-KMS with that environment's state CMK, and a bucket-policy deny for non-TLS requests (`aws:SecureTransport=false`). Deny uploads that request another encryption algorithm or another key, and deny unexpected principals. AWS SDK HTTPS defaults are not a substitute for this policy. Use `force_destroy=false` and `lifecycle { prevent_destroy = true }`; protect the KMS key from destruction, enable annual rotation and retain the ASM-097 30-day key-deletion waiting period. Do not expire historical state versions before an owner approves retention. Enable the landing-zone audit integration. None of these bucket-side protections is created by `encrypt` or verified by `validate`.
 
