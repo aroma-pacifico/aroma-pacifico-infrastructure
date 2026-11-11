@@ -21,12 +21,12 @@ override.tf.json
 *.tfvars
 *.tfvars.json
 *.tfbackend
+!*.tfvars.example
+!*.tfbackend.example
 *.tflock
 *.plan
 *.plan.json
 tfplan
-.terraform-data/
-.local/
 
 # Editors and OS
 .idea/
