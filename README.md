@@ -94,7 +94,7 @@ The continuous integration pipeline validates and exercises every root stack on 
 
 `Infracost cost impact` (`.github/workflows/infracost.yml`) estimates the monthly cost before, after and as a delta for each root stack with Infracost CLI v2 and the non-sensitive qa example variables. It authenticates only with the organization token secret `INFRACOST_CLI_TOKEN` and the repository variables `INFRACOST_ORG` and `INFRACOST_METADATA_EGRESS_APPROVED`, and it reports "estimate unavailable" when they are missing instead of claiming a zero cost.
 
-Promotion across environments is a separate pipeline, `CD promotion` (`.github/workflows/cd-promotion.yml`), documented in `docs/cd-pipeline.md`.
+Promotion across environments is a separate pipeline, `CD promotion` (`.github/workflows/cd-promotion.yml`).
 
 ## Terraform version
 
