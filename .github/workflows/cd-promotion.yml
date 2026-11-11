@@ -370,6 +370,8 @@ jobs:
           {
             echo "## Production approval record (plan-only, nothing applied)"
             echo
+            echo "The plan and the Infracost cost delta that were approved are in the summary of the job **Production review (plan and cost)** of this run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
             echo '```json'
             cat approval-record-pdn.json
             echo '```'
