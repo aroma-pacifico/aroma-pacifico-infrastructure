@@ -35,6 +35,9 @@ jobs:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-1
+      # Fictitious Organizations ID for the emulator. The network stack requires
+      # the variable; the real value is never stored in the repository.
+      TF_VAR_organization_id: o-a1b2c3d4e5
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
     steps:
