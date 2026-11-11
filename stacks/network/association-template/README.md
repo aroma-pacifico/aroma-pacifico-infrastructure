@@ -1,7 +1,0 @@
-# Release-gated association root
-
-This is the complete private root composition for one approved departmental association. The selection, environment and addressing rules remain private; resource logic comes from `collection-center-association`. Both owner providers require explicit account restrictions and external plan-role references. B04's actual outputs feed the typed network input. B07 consumes the routing references.
-
-`REQUIRED_REVIEWED_RELEASE` is deliberately unresolved because no genuine tag exists. For today's plan-only delivery, run `python scripts/verify-d05.py --module-root <local-module-directory>` from the repository root. It stages these templates and the local module into a temporary directory, excludes `backend.tf.example`, initializes with `-backend=false`, validates, and verifies exactly five resources for each department in separate mocked invocations. It also executes full-composition negative fixtures. No production VPC, subnet, hub, certificate or account reference is invented.
-
-The adjacent B01/B05 `stacks/network` root retains the selection contract and S3 declaration. Its zero-resource selection tests do not prove connectivity. Connection evidence comes from this complete staged root. After a future release and owner-approved inputs exist, shared consumption retains the S3 backend. No backend initialization, migration, apply or resource creation belongs to this delivery.

@@ -1,4 +1,0 @@
-# Steady-state shared work only; excluded from offline verification.
-terraform {
-  backend "s3" {}
-}

@@ -11,4 +11,7 @@ locals {
     key         = var.collection_center.key
     environment = var.environment
   }), null)
+
+  # Governance prefix <client>-<project>-<environment>-cc, at most 20 characters (module contract).
+  association_name_prefix = lower("${var.common_tags.Client}-${var.common_tags.Project}-${var.environment}-cc")
 }
