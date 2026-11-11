@@ -16,6 +16,8 @@ variable "common_tags" {
   }
 }
 
+# Used only by its own validation until the stack is wired to modules.
+# tflint-ignore: terraform_unused_declarations
 variable "environment" {
   type        = string
   description = "Environment code: dev, qa or pdn."
