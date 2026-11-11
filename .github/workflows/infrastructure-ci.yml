@@ -20,6 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  env-secrets:
+    name: Secret scan (variable and backend files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          persist-credentials: false
+
+      # Scans every *.tfvars, *.tfbackend and *.example file of the repository
+      # for secret-looking keys, credential shapes and account identifiers
+      # (B03, PC-IAC-016, ADR-003).
+      - name: Scan for secrets
+        run: bash scripts/check-env-secrets.sh .
+
   gates:
     name: Gates (${{ matrix.stack }})
     runs-on: ubuntu-latest
@@ -49,7 +65,7 @@ jobs:
       - name: Set up TFLint
         uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
         with:
-          tflint_version: latest
+          tflint_version: v0.66.0
 
       - name: Format check (terraform fmt)
         run: |
