@@ -70,7 +70,7 @@ terraform -chdir=stacks/state-backend validate
 terraform -chdir=stacks/state-backend test
 ```
 
-`terraform plan` runs in CI against an ephemeral Floci container (PC-IAC-028) that the workflow starts inside each run and discards afterwards. `.github/workflows/floci-plan.yml` does this for the four stacks with the `qa` example variables, and `.github/workflows/infrastructure-ci.yml` holds the CI gates and the saved, reviewable plan of [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31). The `aroma-pacifico-terraform-modules` CI already plans its samples against Floci.
+`terraform plan` runs in CI against an ephemeral Floci container (PC-IAC-028) that the workflow starts inside each run and discards afterwards. `.github/workflows/floci-plan.yml` does this for the four stacks with the `qa` example variables, `.github/workflows/infrastructure-ci.yml` runs the pull request gates of [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31), and `.github/workflows/cd-plan.yml` plans every stack for one environment inside the CD promotion of B12. The `aroma-pacifico-terraform-modules` CI already plans its samples against Floci.
 
 Running Floci locally is optional and only previews a plan before pushing. From the repository root:
 
