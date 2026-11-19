@@ -10,6 +10,27 @@ This private repository holds the Terraform root stacks of the pattern environme
 
 This repository is plan-only: nothing here may run `terraform apply` or `terraform destroy`, or create a live resource (AGENTS.md section 4).
 
+## Where the infrastructure is declared
+
+Everything that builds an environment is on `main`, under `stacks/`. There is no per-environment copy of the code: each stack is one Terraform root that declares its resources by calling reusable modules pinned by git tag, and an environment (`dev`, `qa`, `pdn`) is selected only by its variable file and its backend file.
+
+| Stack (root module) | File that consumes the modules | Modules consumed (tag) | Diagram boxes |
+|---|---|---|---|
+| `stacks/state-backend` | [`main.tf`](stacks/state-backend/main.tf) | `state-backend` (v0.3.0) | D02 |
+| `stacks/network` | [`main.tf`](stacks/network/main.tf) | `network` (v0.3.0), `collection-center-association` (v0.4.0) | D04, D05 |
+| `stacks/security` | [`main.tf`](stacks/security/main.tf), [`firewall_rules.tf`](stacks/security/firewall_rules.tf) | `security` (v0.5.0), `firewall-rules` (v0.5.0) | D06, D07 |
+| `stacks/workload` | [`farm.tf`](stacks/workload/farm.tf), [`telemetry_ingestion.tf`](stacks/workload/telemetry_ingestion.tf), [`inference_functions.tf`](stacks/workload/inference_functions.tf) | `farm`, `telemetry-ingestion`, `inference-functions` (v0.4.0) | D08, D09, D10 |
+
+The modules come from [aroma-pacifico-terraform-modules](https://github.com/aroma-pacifico/aroma-pacifico-terraform-modules) (`modules/<name>?ref=vX.Y.Z`).
+
+| Environment | Variable file | Backend file (one per stack) |
+|---|---|---|
+| `dev` | [`environments/dev/dev.tfvars.example`](environments/dev/dev.tfvars.example) | `stacks/<stack>/backends/dev.s3.tfbackend.example` |
+| `qa` | [`environments/qa/qa.tfvars.example`](environments/qa/qa.tfvars.example) | `stacks/<stack>/backends/qa.s3.tfbackend.example` |
+| `pdn` | [`environments/pdn/pdn.tfvars.example`](environments/pdn/pdn.tfvars.example) | `stacks/<stack>/backends/pdn.s3.tfbackend.example` |
+
+Building one environment is therefore the four stacks, in order `state-backend`, `network`, `security`, `workload`, each initialized with that environment's backend file and planned with its variable file (`scripts/plan-all.sh` runs the four; see [`environments/README.md`](environments/README.md#usage)). The CI and CD workflows in `.github/workflows/` run the same commands.
+
 ## Repository layout
 
 ```text
@@ -49,7 +70,7 @@ terraform -chdir=stacks/state-backend validate
 terraform -chdir=stacks/state-backend test
 ```
 
-`terraform plan` runs in CI against an ephemeral Floci container (PC-IAC-028) that the workflow starts inside each run and discards afterwards. Today `.github/workflows/floci-plan.yml` does this for the four stacks with the `qa` example variables; the full plan pipeline (the saved plan and review summary) belongs to [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31), which is still open. The `aroma-pacifico-terraform-modules` CI already plans its samples against Floci.
+`terraform plan` runs in CI against an ephemeral Floci container (PC-IAC-028) that the workflow starts inside each run and discards afterwards. `.github/workflows/floci-plan.yml` does this for the four stacks with the `qa` example variables, `.github/workflows/infrastructure-ci.yml` runs the pull request gates of [B11](https://github.com/aroma-pacifico/aroma-pacifico-roadmap/issues/31), and `.github/workflows/cd-plan.yml` plans every stack for one environment inside the CD promotion of B12. The `aroma-pacifico-terraform-modules` CI already plans its samples against Floci.
 
 Running Floci locally is optional and only previews a plan before pushing. From the repository root:
 
